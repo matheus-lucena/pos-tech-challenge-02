@@ -1,3 +1,5 @@
+import multiprocessing
+import time
 import requests
 import random
 from points import POINTS
@@ -15,6 +17,10 @@ MAX_TRIP_DURATION = 4 * 3600 # 4 hours in seconds
 MAX_TRIP_DISTANCE = 50000 # Max distance in meters
 TIME_TO_STOP = 180 # 3 minutes in seconds per stop
 TIME_DEPOT_STOP = 180 # 3 minutes in seconds per stop
+
+
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 10
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 2
 
 DEPOT_INDEX = 0 # Assuming the first point is the depot
 
@@ -289,6 +295,7 @@ class VRPGeneticAlgorithm:
         best_solution = self.population[best_idx]
         best_cost = fitness_cache[best_idx]
         count_generations_without_improvement = 0
+        count_generations_without_improvement_for_mutation = 0
         mutation_rate = MUTATION_RATE
 
         for generation in range(GENERATIONS):
@@ -311,17 +318,23 @@ class VRPGeneticAlgorithm:
             new_population.append(best_of_gen)
             new_fitness_cache = [fitness_cache[best_gen_idx]]
 
-            if count_generations_without_improvement > 10:
-                mutation_rate = min(0.5, mutation_rate * 1.2)
+            if count_generations_without_improvement > COUNT_GENERATIONS_WITHOUT_IMPROVEMENT:
+                mutation_rate = min(0.5, mutation_rate * 1.05)
                 count_generations_without_improvement = 0
+                count_generations_without_improvement_for_mutation += 1
                 logging.info('Nova taxa de mutação: %s', mutation_rate)
+            if count_generations_without_improvement_for_mutation > COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION:
+                break
 
             while len(new_population) < POPULATION_SIZE:
                 parent1, parent2 = self.select_parents()
                 child = self.crossover(parent1, parent2)
                 mutated_child = self.mutate(child, mutation_rate)
                 new_population.append(mutated_child)
-                new_fitness_cache.append(self.calculate_fitness(mutated_child))
+                # new_fitness_cache.append(self.calculate_fitness(mutated_child))
+
+            with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+                new_fitness_cache = pool.map(self.calculate_fitness, new_population)
 
             self.population = new_population
             fitness_cache = new_fitness_cache
@@ -335,6 +348,7 @@ class VRPGeneticAlgorithm:
                 best_solution = current_best
                 best_cost = current_best_cost
                 count_generations_without_improvement = 0
+                count_generations_without_improvement_for_mutation = 0
             else:
                 count_generations_without_improvement += 1
 
