@@ -8,8 +8,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 
 # --- PARÂMETROS ---
 OSRM_BASE_URL = "http://localhost:5000/table/v1/driving/"
-POPULATION_SIZE = 300
-GENERATIONS = 2000
+POPULATION_SIZE = 400
+GENERATIONS = 500
 MUTATION_RATE = 0.05
 MAX_VEHICLES = 10
 VEHICLE_CAPACITY = 8 # Max number of stops per vehicle
@@ -19,7 +19,7 @@ TIME_TO_STOP = 180 # 3 minutes in seconds per stop
 TIME_DEPOT_STOP = 180 # 3 minutes in seconds per stop
 
 
-COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 20
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 50
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 2
 
 DEPOT_INDEX = 0 # Assuming the first point is the depot
@@ -94,7 +94,6 @@ class VRPGeneticAlgorithm:
 
     def calculate_fitness(self, solution):
         total_solution_cost = 0.0
-        solution_tuple = tuple(tuple(route) for route in solution)
         for vehicle_route in solution:
             if not vehicle_route:
                 continue
@@ -140,6 +139,7 @@ class VRPGeneticAlgorithm:
                 normalized_distance = current_trip_distance / MAX_TRIP_DISTANCE
                 trip_cost = (self.time_weight * normalized_duration) + (self.distance_weight * normalized_distance)
                 total_solution_cost += trip_cost
+        
         return total_solution_cost
 
     def select_parents(self):
@@ -332,6 +332,12 @@ class VRPGeneticAlgorithm:
 
     def run(self):
         """Executa o loop do algoritmo genético com otimizações de desempenho."""
+        
+        # Define um chunksize para otimizar o uso do multiprocessing.
+        # Um valor maior reduz a comunicação entre processos, melhorando o uso da CPU.
+        cpu_count = multiprocessing.cpu_count()
+        chunksize = POPULATION_SIZE // cpu_count if POPULATION_SIZE > cpu_count else 1
+
         fitness_cache = [self.calculate_fitness(sol) for sol in self.population]
         best_idx = min(range(len(fitness_cache)), key=lambda i: fitness_cache[i])
         best_solution = self.population[best_idx]
@@ -342,6 +348,17 @@ class VRPGeneticAlgorithm:
 
         for generation in range(GENERATIONS):
             new_population = []
+            
+            if count_generations_without_improvement >= COUNT_GENERATIONS_WITHOUT_IMPROVEMENT:
+                logging.info("Geração %d: Sem melhoria por %d gerações. Reiniciando população.", generation + 1, COUNT_GENERATIONS_WITHOUT_IMPROVEMENT)
+                self.population = self.create_initial_population()
+                fitness_cache = [self.calculate_fitness(sol) for sol in self.population]
+                count_generations_without_improvement = 0
+                mutation_rate = MUTATION_RATE
+
+            if count_generations_without_improvement_for_mutation >= COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION:
+                logging.info("Geração %d: Sem melhoria por %d gerações. Aumentando taxa de mutação.", generation + 1, COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION)
+                mutation_rate = min(0.5, mutation_rate * 1.1)
 
             # Aplica a busca local na melhor solução a cada 100 gerações
             if generation % 100 == 0 and best_cost != float('inf'):
@@ -358,25 +375,15 @@ class VRPGeneticAlgorithm:
             best_gen_idx = min(range(len(fitness_cache)), key=lambda i: fitness_cache[i])
             best_of_gen = self.population[best_gen_idx]
             new_population.append(best_of_gen)
-            new_fitness_cache = [fitness_cache[best_gen_idx]]
-
-            if count_generations_without_improvement > COUNT_GENERATIONS_WITHOUT_IMPROVEMENT:
-                mutation_rate = min(0.5, mutation_rate * 1.05)
-                count_generations_without_improvement = 0
-                count_generations_without_improvement_for_mutation += 1
-                logging.info('Nova taxa de mutação: %s', mutation_rate)
-            if count_generations_without_improvement_for_mutation > COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION:
-                break
-
+            
             while len(new_population) < POPULATION_SIZE:
                 parent1, parent2 = self.select_parents()
                 child = self.crossover(parent1, parent2)
                 mutated_child = self.mutate(child, mutation_rate)
                 new_population.append(mutated_child)
-                # new_fitness_cache.append(self.calculate_fitness(mutated_child))
 
-            with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-                new_fitness_cache = pool.map(self.calculate_fitness, new_population)
+            with multiprocessing.Pool(processes=cpu_count) as pool:
+                new_fitness_cache = pool.map(self.calculate_fitness, new_population, chunksize=chunksize)
 
             self.population = new_population
             fitness_cache = new_fitness_cache
@@ -459,7 +466,6 @@ if __name__ == "__main__":
                 print(f"        Tempo de viagem: {total_travel_duration / 60:.2f} minutos")
                 print(f"        Distância de viagem: {total_travel_distance:.2f} metros")
                 print(f"        Rota (índices): {travel}")
-
 
     end_time = time.time()
     logging.info("Tempo total de execução: %.2f segundos", end_time - start_time)
