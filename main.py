@@ -3,6 +3,7 @@ import requests
 import random
 from points import POINTS
 import logging
+import time
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 # --- PARÂMETROS ---
@@ -18,7 +19,7 @@ TIME_TO_STOP = 180 # 3 minutes in seconds per stop
 TIME_DEPOT_STOP = 180 # 3 minutes in seconds per stop
 
 
-COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 50
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 20
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 2
 
 DEPOT_INDEX = 0 # Assuming the first point is the depot
@@ -93,6 +94,7 @@ class VRPGeneticAlgorithm:
 
     def calculate_fitness(self, solution):
         total_solution_cost = 0.0
+        solution_tuple = tuple(tuple(route) for route in solution)
         for vehicle_route in solution:
             if not vehicle_route:
                 continue
@@ -138,7 +140,6 @@ class VRPGeneticAlgorithm:
                 normalized_distance = current_trip_distance / MAX_TRIP_DISTANCE
                 trip_cost = (self.time_weight * normalized_duration) + (self.distance_weight * normalized_distance)
                 total_solution_cost += trip_cost
-        
         return total_solution_cost
 
     def select_parents(self):
@@ -399,6 +400,7 @@ class VRPGeneticAlgorithm:
 
 # --- EXECUÇÃO PRINCIPAL ---
 if __name__ == "__main__":
+    start_time = time.time()
     duration_matrix, distance_matrix = get_cost_matrix(POINTS)
     
     if duration_matrix and distance_matrix:
@@ -457,3 +459,7 @@ if __name__ == "__main__":
                 print(f"        Tempo de viagem: {total_travel_duration / 60:.2f} minutos")
                 print(f"        Distância de viagem: {total_travel_distance:.2f} metros")
                 print(f"        Rota (índices): {travel}")
+
+
+    end_time = time.time()
+    logging.info("Tempo total de execução: %.2f segundos", end_time - start_time)
