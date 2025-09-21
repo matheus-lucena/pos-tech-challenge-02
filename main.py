@@ -1,5 +1,4 @@
 import multiprocessing
-import time
 import requests
 import random
 from points import POINTS
@@ -13,13 +12,13 @@ GENERATIONS = 2000
 MUTATION_RATE = 0.05
 MAX_VEHICLES = 10
 VEHICLE_CAPACITY = 8 # Max number of stops per vehicle
-MAX_TRIP_DURATION = 4 * 3600 # 4 hours in seconds
+MAX_TRIP_DURATION = 2 * 3600 # X hours in seconds
 MAX_TRIP_DISTANCE = 50000 # Max distance in meters
 TIME_TO_STOP = 180 # 3 minutes in seconds per stop
 TIME_DEPOT_STOP = 180 # 3 minutes in seconds per stop
 
 
-COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 10
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 50
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 2
 
 DEPOT_INDEX = 0 # Assuming the first point is the depot
@@ -67,25 +66,27 @@ class VRPGeneticAlgorithm:
 
         for _ in range(POPULATION_SIZE):
             random.shuffle(all_points)
-            solution = []
-            
-            points_to_assign = all_points[:]
-            
-            while points_to_assign:
-                route_for_vehicle = [DEPOT_INDEX]
-                current_trip_stops = 0
 
-                while points_to_assign and current_trip_stops < VEHICLE_CAPACITY:
-                    point_to_add = points_to_assign.pop(0)
-                    route_for_vehicle.append(point_to_add)
-                    current_trip_stops += 1
-                
-                route_for_vehicle.append(DEPOT_INDEX)
-                solution.append(route_for_vehicle)
+            solution = [[] for _ in range(MAX_VEHICLES)]
             
-            # Limita o número de veículos ao máximo permitido
-            if len(solution) > MAX_VEHICLES:
-                solution = solution[:MAX_VEHICLES]
+            for i, point in enumerate(all_points):
+                vehicle_index = i % MAX_VEHICLES
+                solution[vehicle_index].append(point)
+
+            for i in range(MAX_VEHICLES):
+                vehicle_route = [DEPOT_INDEX]
+                trip_points = 0
+                for point in solution[i]:
+                    vehicle_route.append(point)
+                    trip_points += 1
+                    if trip_points == VEHICLE_CAPACITY:
+                        vehicle_route.append(DEPOT_INDEX)
+                        trip_points = 0
+                
+                if vehicle_route[-1] != DEPOT_INDEX:
+                    vehicle_route.append(DEPOT_INDEX)
+                
+                solution[i] = vehicle_route
             
             population.append(solution)
         return population
@@ -95,12 +96,12 @@ class VRPGeneticAlgorithm:
         for vehicle_route in solution:
             if not vehicle_route:
                 continue
-
             # A rota do veículo é uma sequência de viagens. Vamos processá-las uma a uma.
             depot_indices = [i for i, x in enumerate(vehicle_route) if x == DEPOT_INDEX]
             
+            # This check is crucial to identify malformed routes
             if vehicle_route[0] != DEPOT_INDEX or vehicle_route[-1] != DEPOT_INDEX or len(depot_indices) < 2:
-                logging.warning('Rota de veículo malformada.')
+                logging.warning('Rota de veículo malformada. Rota: %s', vehicle_route)
                 return float('inf')
 
             for i in range(len(depot_indices) - 1):
@@ -152,42 +153,70 @@ class VRPGeneticAlgorithm:
 
     def crossover(self, parent1, parent2):
         """
-        Realiza o crossover para VRP, garantindo que o filho tenha a
-        mesma estrutura de veículos dos pais.
+        Crossover especializado para VRP que preserva a estrutura de múltiplos
+        retornos ao depósito.
         """
-        parent1_points = [gene for route in parent1 for gene in route if gene != DEPOT_INDEX]
-        parent2_points = [gene for route in parent2 for gene in route if gene != DEPOT_INDEX]
-        
-        if not parent1_points or not parent2_points:
+        if not parent1 or not parent2:
             return random.choice([parent1, parent2])
-            
-        child_points = [None] * len(parent1_points)
-        
-        start_index, end_index = sorted(random.sample(range(len(parent1_points)), 2))
-        
-        segment = parent1_points[start_index:end_index]
-        child_points[start_index:end_index] = segment
-        
-        fill_position = end_index
-        for point in parent2_points:
-            if point not in segment:
-                child_points[fill_position % len(parent1_points)] = point
-                fill_position += 1
 
+        # Coleta todos os pontos de ambos os pais
+        parent1_points = [p for route in parent1 for p in route if p != DEPOT_INDEX]
+        parent2_points = [p for route in parent2 for p in route if p != DEPOT_INDEX]
+        all_unique_points = list(set(parent1_points + parent2_points))
+        random.shuffle(all_unique_points)
+        
+        # Cria um "esqueleto" de rota com a estrutura do parent1
         child = []
-        points_to_assign = child_points[:]
-        for route in parent1:
-            num_delivery_points = len([gene for gene in route if gene != DEPOT_INDEX])
-            
-            if num_delivery_points == 0:
+        points_to_assign = all_unique_points[:]
+        
+        for parent_route in parent1:
+            if not parent_route:
                 continue
 
-            new_route = [DEPOT_INDEX] + points_to_assign[:num_delivery_points]
-            points_to_assign = points_to_assign[num_delivery_points:]
-            new_route.append(DEPOT_INDEX)
+            # Conta o número de viagens e paradas na rota do pai
+            num_trips = len([p for p in parent_route if p == DEPOT_INDEX]) - 1
+            trips_stops = []
             
-            child.append(new_route)
+            # Divide a rota do pai em viagens individuais e conta as paradas
+            depot_indices = [i for i, x in enumerate(parent_route) if x == DEPOT_INDEX]
+            for i in range(len(depot_indices) - 1):
+                trip_points = parent_route[depot_indices[i]:depot_indices[i+1]+1]
+                trips_stops.append(len(trip_points) - 2)
 
+            # Reconstroi a rota do filho com os novos pontos, respeitando a estrutura do pai
+            child_route = [DEPOT_INDEX]
+            
+            for num_stops in trips_stops:
+                current_trip_stops = 0
+                while current_trip_stops < num_stops and points_to_assign:
+                    child_route.append(points_to_assign.pop(0))
+                    current_trip_stops += 1
+                child_route.append(DEPOT_INDEX)
+            
+            # Adiciona a rota do filho na solução
+            child.append(child_route)
+
+        # Adiciona os pontos restantes que não couberam na estrutura do pai
+        if points_to_assign:
+            temp_points = points_to_assign[:]
+            # Tenta preencher rotas existentes que ainda não estão cheias
+            for route in child:
+                current_stops = len([p for p in route if p != DEPOT_INDEX])
+                while current_stops < VEHICLE_CAPACITY and temp_points:
+                    route.insert(len(route) - 1, temp_points.pop(0))
+                    current_stops += 1
+            
+            # Cria novas rotas para os pontos que ainda restaram
+            while temp_points:
+                new_route = [DEPOT_INDEX]
+                current_stops = 0
+                while current_stops < VEHICLE_CAPACITY and temp_points:
+                    new_route.append(temp_points.pop(0))
+                    current_stops += 1
+                new_route.append(DEPOT_INDEX)
+                child.append(new_route)
+
+        # Garante que o número de veículos não excede o máximo
         while len(child) < MAX_VEHICLES:
             child.append([])
         
@@ -211,16 +240,25 @@ class VRPGeneticAlgorithm:
                 points_only[idx1:idx2] = points_only[idx1:idx2][::-1]
 
             new_solution = []
-            point_idx = 0
+            points_iter = iter(points_only)
+            
             for route in solution:
                 if not route:
+                    new_solution.append([])
                     continue
                 reconstructed_route = [DEPOT_INDEX]
-                for _ in range(len(route) - 2):
-                    reconstructed_route.append(points_only[point_idx])
-                    point_idx += 1
-                reconstructed_route.append(DEPOT_INDEX)
-                new_solution.append(reconstructed_route)
+                
+                try:
+                    num_delivery_points = len([gene for gene in route if gene != DEPOT_INDEX])
+                    for _ in range(num_delivery_points):
+                        reconstructed_route.append(next(points_iter))
+                    reconstructed_route.append(DEPOT_INDEX)
+                    new_solution.append(reconstructed_route)
+                except StopIteration:
+                    # This is a safeguard against an unexpected point count mismatch.
+                    # It should not be triggered if the code is correct.
+                    break 
+
             return new_solution
 
         else:
@@ -242,6 +280,9 @@ class VRPGeneticAlgorithm:
                 if source_route_index != -1 and target_route_index != -1:
                     new_solution = [r[:] for r in solution]
                     new_solution[source_route_index].pop(point_in_route_index)
+                    # Handle case where a trip becomes empty
+                    if len(new_solution[source_route_index]) == 2 and new_solution[source_route_index][0] == new_solution[source_route_index][1]:
+                        new_solution[source_route_index] = []
                     target_route_length = len(new_solution[target_route_index])
                     insert_index = random.randint(1, target_route_length - 1)
                     new_solution[target_route_index].insert(insert_index, random_point_to_move)
@@ -410,9 +451,9 @@ if __name__ == "__main__":
                         
                     last_point_idx = point_idx
                 
-                print(f"    Viagem {j+1}:")
-                print(f"      Paradas: {travel[1:-1]}")
-                print(f"      Total de paradas de entrega: {len(travel) - 2}")
-                print(f"      Tempo de viagem: {total_travel_duration / 60:.2f} minutos")
-                print(f"      Distância de viagem: {total_travel_distance:.2f} metros")
-                print(f"      Rota (índices): {travel}")
+                print(f"      Viagem {j+1}:")
+                print(f"        Paradas: {travel[1:-1]}")
+                print(f"        Total de paradas de entrega: {len(travel) - 2}")
+                print(f"        Tempo de viagem: {total_travel_duration / 60:.2f} minutos")
+                print(f"        Distância de viagem: {total_travel_distance:.2f} metros")
+                print(f"        Rota (índices): {travel}")
