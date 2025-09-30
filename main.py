@@ -9,18 +9,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 # --- PARÂMETROS ---
 OSRM_BASE_URL = "http://localhost:5000/table/v1/driving/"
 POPULATION_SIZE = 400
-GENERATIONS = 500
+GENERATIONS = 200
 MUTATION_RATE = 0.05
-MAX_VEHICLES = 10
+MAX_VEHICLES = 20
 VEHICLE_MAX_POINTS = 8 # Max number of stops per vehicle
-MAX_TRIP_DURATION = 2 * 3600 # X hours in seconds
+MAX_TRIP_DURATION = 8 * 3600 # X hours in seconds
 MAX_TRIP_DISTANCE = 50000 # Max distance in meters
 TIME_TO_STOP = 180 # 3 minutes in seconds per stop
 TIME_DEPOT_STOP = 180 # 3 minutes in seconds per stop
 
 
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 50
-COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 2
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 5
 
 DEPOT_INDEX = 0 # Assuming the first point is the depot
 
@@ -53,7 +53,7 @@ def get_cost_matrix(locations):
 
 # --- CLASSE DO ALGORITMO GENÉTICO VRP ---
 class VRPGeneticAlgorithm:
-    def __init__(self, duration_matrix, distance_matrix, num_points, time_weight=1, distance_weight=0):
+    def __init__(self, duration_matrix, distance_matrix, num_points, time_weight=0.5, distance_weight=0.5):
         self.duration_matrix = duration_matrix
         self.distance_matrix = distance_matrix
         self.num_points = num_points
@@ -359,6 +359,7 @@ class VRPGeneticAlgorithm:
             if count_generations_without_improvement_for_mutation >= COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION:
                 logging.info("Geração %d: Sem melhoria por %d gerações. Aumentando taxa de mutação.", generation + 1, COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION)
                 mutation_rate = min(0.5, mutation_rate * 1.1)
+                count_generations_without_improvement_for_mutation = 0
 
             # Aplica a busca local na melhor solução a cada 100 gerações
             if generation % 100 == 0 and best_cost != float('inf'):
@@ -400,6 +401,7 @@ class VRPGeneticAlgorithm:
                 count_generations_without_improvement_for_mutation = 0
             else:
                 count_generations_without_improvement += 1
+                count_generations_without_improvement_for_mutation += 1
 
             logging.info('Geração %d - Melhor Custo Global: %.2f', generation + 1, best_cost)
 
@@ -466,6 +468,16 @@ if __name__ == "__main__":
                 print(f"        Tempo de viagem: {total_travel_duration / 60:.2f} minutos")
                 print(f"        Distância de viagem: {total_travel_distance:.2f} metros")
                 print(f"        Rota (índices): {travel}")
+                # Gera string formatada: latitude01,longitude01/latitude02,longitude02/...
+                # String formatada das paradas da viagem (incluindo o depósito)
+                formatted_travel_points = "/".join([f"{POINTS[idx][0]},{POINTS[idx][1]}" for idx in travel])
+                print(f"        String formatada das paradas da viagem: {formatted_travel_points}")
+
+            # String formatada das paradas da rota do veículo (todas as viagens, incluindo o depósito)
+            formatted_route_points = "/".join([f"{POINTS[idx][0]},{POINTS[idx][1]}" for idx in route])
+            print(f"    String formatada das paradas da rota do veículo: {formatted_route_points}")
 
     end_time = time.time()
-    logging.info("Tempo total de execução: %.2f segundos", end_time - start_time)
+    logging.info("Tempo total de execução: %.2f segundos", end_time - start_time)\
+
+print(POINTS[0])
