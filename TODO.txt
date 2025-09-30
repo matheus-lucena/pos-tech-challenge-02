@@ -1,0 +1,11 @@
+* Separar os métodos geneticos
+* Melhorar o desempenho do algortimo
+
+---
+* Comparativo de desempenho com outras abordagens de roteamento
+  * Comparativo com VRP https://developers.google.com/optimization/routing/vrp
+---
+* Visualizações e análises das rotas otimizadas
+* Documentaçao do projeto
+* Integracao LLM
+* Adicionar capacidade veicular com base em volume

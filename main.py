@@ -12,7 +12,7 @@ POPULATION_SIZE = 400
 GENERATIONS = 500
 MUTATION_RATE = 0.05
 MAX_VEHICLES = 10
-VEHICLE_CAPACITY = 8 # Max number of stops per vehicle
+VEHICLE_MAX_POINTS = 8 # Max number of stops per vehicle
 MAX_TRIP_DURATION = 2 * 3600 # X hours in seconds
 MAX_TRIP_DISTANCE = 50000 # Max distance in meters
 TIME_TO_STOP = 180 # 3 minutes in seconds per stop
@@ -80,7 +80,7 @@ class VRPGeneticAlgorithm:
                 for point in solution[i]:
                     vehicle_route.append(point)
                     trip_points += 1
-                    if trip_points == VEHICLE_CAPACITY:
+                    if trip_points == VEHICLE_MAX_POINTS:
                         vehicle_route.append(DEPOT_INDEX)
                         trip_points = 0
                 
@@ -131,7 +131,7 @@ class VRPGeneticAlgorithm:
                         
                     last_point_idx = point_idx
                 
-                if current_trip_duration > MAX_TRIP_DURATION or current_trip_distance > MAX_TRIP_DISTANCE or current_trip_stops > VEHICLE_CAPACITY:
+                if current_trip_duration > MAX_TRIP_DURATION or current_trip_distance > MAX_TRIP_DISTANCE or current_trip_stops > VEHICLE_MAX_POINTS:
                     logging.debug('Viagem inválida. Duração: %d, Distância: %d, Paradas: %d', current_trip_duration, current_trip_distance, current_trip_stops)
                     return float('inf')
 
@@ -203,7 +203,7 @@ class VRPGeneticAlgorithm:
             # Tenta preencher rotas existentes que ainda não estão cheias
             for route in child:
                 current_stops = len([p for p in route if p != DEPOT_INDEX])
-                while current_stops < VEHICLE_CAPACITY and temp_points:
+                while current_stops < VEHICLE_MAX_POINTS and temp_points:
                     route.insert(len(route) - 1, temp_points.pop(0))
                     current_stops += 1
             
@@ -211,7 +211,7 @@ class VRPGeneticAlgorithm:
             while temp_points:
                 new_route = [DEPOT_INDEX]
                 current_stops = 0
-                while current_stops < VEHICLE_CAPACITY and temp_points:
+                while current_stops < VEHICLE_MAX_POINTS and temp_points:
                     new_route.append(temp_points.pop(0))
                     current_stops += 1
                 new_route.append(DEPOT_INDEX)
