@@ -4,11 +4,14 @@ import random
 from points import POINTS
 import logging
 import time
+import math
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 # --- PARÂMETROS ---
 OSRM_BASE_URL = "http://localhost:5000/table/v1/driving/"
 POPULATION_SIZE = 400
+POPULATION_HEURISTIC_TAX = 0.5
 GENERATIONS = 200
 MUTATION_RATE = 0.05
 MAX_VEHICLES = 20
@@ -91,6 +94,99 @@ class VRPGeneticAlgorithm:
             
             population.append(solution)
         return population
+
+    def create_initial_population_heuristic_optimized(self):
+        """
+        Combina a Heurística de Varredura para AGRUPAR clientes por ângulo 
+        e o Vizinho Mais Próximo para SEQUENCIAR as rotas, usando a matriz de distâncias.
+        """
+        
+        depot_lat, depot_lon = self.points_coordinates[DEPOT_INDEX]
+        all_points = list(range(1, self.num_points))
+        
+        points_angles = []
+        for i in all_points:
+            lat, lon = self.points_coordinates[i]
+            angle = math.atan2(lat - depot_lat, lon - depot_lon)
+            points_angles.append((angle, i))
+
+        points_angles.sort()
+        sorted_points = [point_idx for _, point_idx in points_angles]
+        
+        clusters = []
+        current_cluster = []
+        
+        for point_idx in sorted_points:
+            if len(current_cluster) >= VEHICLE_MAX_POINTS:
+                clusters.append(current_cluster)
+                current_cluster = []
+                
+            current_cluster.append(point_idx)
+
+        if current_cluster:
+            clusters.append(current_cluster)
+            
+        final_solution = []
+        
+        for cluster in clusters:
+            
+            remaining_points = cluster[:]
+            vehicle_route = [DEPOT_INDEX]
+            
+            while remaining_points:
+                
+                current_trip = [DEPOT_INDEX]
+                current_trip_stops = 0
+                current_location = DEPOT_INDEX
+                
+                while remaining_points and current_trip_stops < VEHICLE_MAX_POINTS:
+                    
+                    best_next_point = -1
+                    min_distance = float('inf')
+                    
+                    for next_point in remaining_points:
+                        dist = self.distance_matrix[current_location][next_point]
+                        if dist < min_distance:
+                            min_distance = dist
+                            best_next_point = next_point
+                    
+                    if best_next_point != -1:
+                        current_trip.append(best_next_point)
+                        remaining_points.remove(best_next_point)
+                        current_location = best_next_point
+                        current_trip_stops += 1
+                    else:
+                        break 
+                        
+                if len(current_trip) > 1:
+                    current_trip.append(DEPOT_INDEX)
+                    vehicle_route.extend(current_trip[1:])
+
+            final_solution.append(vehicle_route)
+
+        while len(final_solution) < MAX_VEHICLES:
+            final_solution.append([])
+            
+        random.shuffle(final_solution)
+        
+        return final_solution
+
+    def create_initial_population_hybrid(self):        
+        num_clustered = int(POPULATION_SIZE * POPULATION_HEURISTIC_TAX)
+        num_random = POPULATION_SIZE - num_clustered
+        
+        population = []
+        
+        for _ in range(num_clustered):
+            solution = self.create_initial_population_heuristic()
+            population.append(solution)
+            
+        for _ in range(num_random):
+            solution = self.create_initial_population()
+            population.append(solution)
+            
+        return population
+
 
     def calculate_fitness(self, solution):
         total_solution_cost = 0.0
