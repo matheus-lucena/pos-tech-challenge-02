@@ -3,6 +3,7 @@ import requests
 import random
 import math
 from points import POINTS
+from llmintegration import gerar_pdf_relatorio
 import logging
 import time
 import json
@@ -111,8 +112,8 @@ def generate_json_output(best_solution, best_cost, duration_matrix, distance_mat
         },
         "routes": all_routes_data
     }
-    
-    return final_output
+
+    gerar_pdf_relatorio(final_output)  # Chama a função para gerar o PDF
 
 def get_matrix(locations):
     coords_str = ";".join([f"{lon},{lat}" for lat, lon in locations])
