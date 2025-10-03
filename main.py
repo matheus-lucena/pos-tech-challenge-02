@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 OSRM_BASE_URL = "http://localhost:5000/table/v1/driving/"
 POPULATION_SIZE = 400
 POPULATION_HEURISTIC_TAX = 0.5
-GENERATIONS = 200
+GENERATIONS = 20
 MUTATION_RATE = 0.05
 MAX_VEHICLES = 20
 VEHICLE_MAX_POINTS = 8 # Max number of stops per vehicle
@@ -113,7 +113,8 @@ def generate_json_output(best_solution, best_cost, duration_matrix, distance_mat
         "routes": all_routes_data
     }
 
-    gerar_pdf_relatorio(final_output)  # Chama a função para gerar o PDF
+    gerar_pdf_relatorio(final_output)  # Chama a função para gerar o PDF com o dicionário JSON
+    return final_output
 
 def get_matrix(locations):
     coords_str = ";".join([f"{lon},{lat}" for lat, lon in locations])
