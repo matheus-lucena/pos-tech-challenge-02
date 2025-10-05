@@ -2,6 +2,8 @@
 
 Uma aplicação web para resolução do Problema de Roteamento de Veículos (VRP) com interface de mapa interativo para otimização de rotas.
 
+![Banner](docs/banner.png)
+
 ## Funcionalidades
 
 - Mapa interativo para seleção de pontos
