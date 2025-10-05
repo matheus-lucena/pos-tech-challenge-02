@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Route Planning & Training Monitor</title>
-    
+
     <!-- External CSS -->
     <link
       rel="stylesheet"
@@ -20,6 +20,7 @@
     
     <!-- External JavaScript -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/leaflet.encoded.js"></script>
   </head>
   <body>
     <div class="container">
@@ -89,7 +90,12 @@
                 readonly
               />
               <div class="company-address-controls">
-                <button type="button" id="company-address-btn" onclick="setCompanyAddressMode()" class="btn-company-address">
+                <button
+                  type="button"
+                  id="company-address-btn"
+                  onclick="setCompanyAddressMode()"
+                  class="btn-company-address"
+                >
                   <i class="fas fa-map-marker-alt"></i> Select on Map
                 </button>
               </div>

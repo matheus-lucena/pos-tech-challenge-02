@@ -2,7 +2,7 @@
  * Initialize EventSource for real-time updates
  */
 function initEventSource() {
-  const eventSource = new EventSource('http://localhost:5002/stream');
+  const eventSource = new EventSource('/stream');
   
   eventSource.onmessage = function(event) {
     const data = JSON.parse(event.data);

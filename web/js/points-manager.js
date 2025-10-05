@@ -158,7 +158,7 @@ async function calculateRoute() {
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculating...';
 
   try {
-    const response = await fetch("http://localhost:5002/calculate-route", {
+    const response = await fetch("/calculate-route", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -150,7 +150,7 @@ function updateRouteVisualization(data) {
  * @param {string} color - Color for the route line
  * @param {number} vehicleId - Vehicle identifier
  */
-function drawVehicleRoute(points, route, vehicleId, color = 'white', dashArray = null) {
+async function drawVehicleRoute(points, route, vehicleId, color = 'white', dashArray = null) {
   if (!route || route.length < 2) return;
 
   // Get coordinates for the route points
@@ -163,8 +163,13 @@ function drawVehicleRoute(points, route, vehicleId, color = 'white', dashArray =
 
   if (routeCoords.length < 2) return;
 
+  const coordString = routeCoords.map(c => c.reverse().join(',')).join(';')
+  const result = await fetch(`http://localhost:5001/trip/v1/car/${coordString}?geometries=polyline&overview=full`)
+  const json = await result.json()
+  const geometry = json.trips[0].geometry
+  
   // Create polyline for the route
-  const polyline = L.polyline(routeCoords, {
+  const polyline = L.Polyline.fromEncoded(geometry, {
     color: color,
     weight: 3,
     opacity: 0.6,
@@ -172,7 +177,7 @@ function drawVehicleRoute(points, route, vehicleId, color = 'white', dashArray =
   }).addTo(map);
 
   // Add popup with vehicle info
-  polyline.bindPopup(`Vehicle ${vehicleId}<br>Points: ${route.length - 2}`); // -2 to exclude start/end depot
+  // polyline.bindPopup(`Vehicle ${vehicleId}<br>Points: ${route.length - 2}`); // -2 to exclude start/end depot
 
   // Store for cleanup
   routeLines.push(polyline);
@@ -195,3 +200,9 @@ window.setCompanyAddressMode = setCompanyAddressMode;
 window.setCompanyAddress = setCompanyAddress;
 window.updateRouteVisualization = updateRouteVisualization;
 window.clearRouteLines = clearRouteLines;
+
+try {
+  drawVehicleRoute([], [], 'red', 'red')
+} catch (E) {
+  console.log(E)
+}

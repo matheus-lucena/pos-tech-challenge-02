@@ -7,7 +7,7 @@ from vrp.main import run_vrp
 
 app = Flask(__name__, static_folder='web', static_url_path='')
 
-event_queue = Queue()
+event_queue = Queue(maxsize=1000)
 
 def send_training_event(epoch, loss, accuracy, **kwargs):
     event_data = {
