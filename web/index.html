@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Route Planning & Training Monitor</title>
+    
+    <!-- External CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css" />
+    
+    <!-- External JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <aside>
+        <div class="sidebar-tabs">
+          <button class="tab-button" data-tab="config">
+            <i class="fas fa-cog"></i> Config
+          </button>
+          <button class="tab-button active" data-tab="routing">
+            <i class="fas fa-route"></i> Routing
+          </button>
+          <button class="tab-button" data-tab="recents">
+            <i class="fas fa-history"></i> Recents
+          </button>
+        </div>
+
+        <!-- Config Tab -->
+        <div class="tab-content" id="config-tab">
+          <div class="section">
+            <h3 class="section-title">Business Configuration</h3>
+
+            <div class="form-group">
+              <label for="num-vehicles">Number of Vehicles</label>
+              <input
+                type="number"
+                id="num-vehicles"
+                min="1"
+                placeholder="e.g., 5"
+              />
+              <span class="error-message" id="error-num-vehicles"
+                >Please enter a valid number of vehicles</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="max-trip-duration">Max Trip Duration (minutes)</label>
+              <input
+                type="number"
+                id="max-trip-duration"
+                min="1"
+                placeholder="e.g., 120"
+              />
+              <span class="error-message" id="error-max-trip-duration"
+                >Please enter a valid duration</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="wait-time">Wait Time (minutes)</label>
+              <input
+                type="number"
+                id="wait-time"
+                min="0"
+                placeholder="e.g., 15"
+              />
+              <span class="error-message" id="error-wait-time"
+                >Please enter a valid wait time</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="company-address">Company Address</label>
+              <input
+                type="text"
+                id="company-address"
+                placeholder="-23.55, -46.63"
+                readonly
+              />
+              <div class="company-address-controls">
+                <button type="button" id="company-address-btn" onclick="setCompanyAddressMode()" class="btn-company-address">
+                  <i class="fas fa-map-marker-alt"></i> Select on Map
+                </button>
+              </div>
+              <span class="error-message" id="error-company-address"
+                >Please select a valid company address</span
+              >
+            </div>
+          </div>
+
+          <div class="section">
+            <h3 class="section-title">AI Model Configuration</h3>
+
+            <div class="form-group">
+              <label for="max-epochs">Max Epochs</label>
+              <input
+                type="number"
+                id="max-epochs"
+                min="1"
+                placeholder="e.g., 1000"
+              />
+              <span class="error-message" id="error-max-epochs"
+                >Please enter a valid number of epochs</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="mutation-rate">Mutation Rate (%)</label>
+              <input
+                type="number"
+                id="mutation-rate"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="e.g., 5.0"
+              />
+              <span class="error-message" id="error-mutation-rate"
+                >Please enter a valid percentage (0-100)</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="max-no-improvement"
+                >Max Generations Without Improvement</label
+              >
+              <input
+                type="number"
+                id="max-no-improvement"
+                min="1"
+                placeholder="e.g., 50"
+              />
+              <span class="error-message" id="error-max-no-improvement"
+                >Please enter a valid number</span
+              >
+            </div>
+          </div>
+
+          <button class="btn" onclick="saveConfig()">
+            <i class="fas fa-save"></i> Save Configuration
+          </button>
+        </div>
+
+        <!-- Routing Tab -->
+        <div class="tab-content active" id="routing-tab">
+          <div class="section">
+            <div class="info-box">
+              <i class="fas fa-info-circle"></i>
+              Click on the map to add points or enter coordinates manually.
+              Maximum 10 points.
+            </div>
+
+            <div class="add-point-controls">
+              <input
+                type="text"
+                id="manual-coords"
+                placeholder="lat, long (e.g., -23.55, -46.63)"
+              />
+              <button onclick="addManualPoint()">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+
+            <div id="points-list"></div>
+
+            <button class="btn" onclick="calculateRoute()" id="calculate-btn">
+              <i class="fas fa-calculator"></i> Calculate Route
+            </button>
+          </div>
+        </div>
+
+        <!-- Recents Tab -->
+        <div class="tab-content" id="recents-tab">
+          <div class="section">
+            <h3 class="section-title">Recent Calculations</h3>
+            <div id="recents-list">
+              <p style="color: #737373; text-align: center; padding: 20px">
+                No recent calculations yet
+              </p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div id="map"></div>
+      </main>
+    </div>
+
+    <!-- Custom JavaScript Modules -->
+    <script src="js/map-manager.js"></script>
+    <script src="js/points-manager.js"></script>
+    <script src="js/config-manager.js"></script>
+    <script src="js/ui-manager.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

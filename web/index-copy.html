@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Route Planning & Training Monitor</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background-color: #0a0a0a;
+        color: #e5e5e5;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .container {
+        display: flex;
+        height: 100vh;
+      }
+
+      aside {
+        width: 350px;
+        background-color: #141414;
+        border-right: 1px solid #2a2a2a;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .sidebar-tabs {
+        display: flex;
+        background-color: #0a0a0a;
+        border-bottom: 1px solid #2a2a2a;
+      }
+
+      .tab-button {
+        flex: 1;
+        padding: 16px;
+        background: none;
+        border: none;
+        color: #737373;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .tab-button:hover {
+        color: #22c55e;
+        background-color: #1a1a1a;
+      }
+
+      .tab-button.active {
+        color: #22c55e;
+        border-bottom: 2px solid #22c55e;
+        background-color: #141414;
+      }
+
+      .tab-content {
+        display: none;
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .section {
+        margin-bottom: 24px;
+      }
+
+      .section-title {
+        color: #22c55e;
+        font-size: 1.1rem;
+        margin-bottom: 12px;
+        font-weight: 600;
+      }
+
+      .form-group {
+        margin-bottom: 16px;
+      }
+
+      .form-group label {
+        display: block;
+        color: #a3a3a3;
+        font-size: 0.9rem;
+        margin-bottom: 6px;
+      }
+
+      .form-group input {
+        width: 100%;
+        padding: 10px;
+        background-color: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 6px;
+        color: #e5e5e5;
+        font-size: 0.95rem;
+        transition: border-color 0.3s;
+      }
+
+      .form-group input:focus {
+        outline: none;
+        border-color: #22c55e;
+      }
+
+      .form-group input.error {
+        border-color: #ef4444;
+      }
+
+      .error-message {
+        color: #ef4444;
+        font-size: 0.85rem;
+        margin-top: 4px;
+        display: none;
+      }
+
+      .error-message.show {
+        display: block;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 12px;
+        background-color: #22c55e;
+        color: #0a0a0a;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-size: 1rem;
+      }
+
+      .btn:hover {
+        background-color: #16a34a;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .btn:disabled {
+        background-color: #2a2a2a;
+        color: #737373;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .point-item {
+        background-color: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .point-number {
+        background-color: #22c55e;
+        color: #0a0a0a;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.9rem;
+        flex-shrink: 0;
+      }
+
+      .point-coords {
+        flex: 1;
+        font-size: 0.85rem;
+        color: #a3a3a3;
+      }
+
+      .point-remove {
+        background: none;
+        border: none;
+        color: #ef4444;
+        cursor: pointer;
+        font-size: 1.1rem;
+        padding: 4px 8px;
+        transition: color 0.3s;
+      }
+
+      .point-remove:hover {
+        color: #dc2626;
+      }
+
+      .add-point-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .add-point-controls input {
+        flex: 1;
+      }
+
+      .add-point-controls button {
+        padding: 10px 16px;
+        background-color: #1a1a1a;
+        border: 1px solid #22c55e;
+        color: #22c55e;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .add-point-controls button:hover {
+        background-color: #22c55e;
+        color: #0a0a0a;
+      }
+
+      .info-box {
+        background-color: #1a2e1a;
+        border: 1px solid #22c55e;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 16px;
+        font-size: 0.85rem;
+        color: #a3a3a3;
+      }
+
+      .info-box i {
+        color: #22c55e;
+        margin-right: 8px;
+      }
+
+      main {
+        flex: 1;
+        position: relative;
+      }
+
+      #map {
+        width: 100%;
+        height: 100%;
+        cursor: crosshair;
+      }
+
+      #map.normal-cursor {
+        cursor: default;
+      }
+
+      .recents-item {
+        background-color: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        border-radius: 6px;
+        padding: 14px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .recents-item:hover {
+        border-color: #22c55e;
+        transform: translateX(4px);
+      }
+
+      .recents-item-title {
+        color: #e5e5e5;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .recents-item-meta {
+        color: #737373;
+        font-size: 0.85rem;
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #141414;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #2a2a2a;
+        border-radius: 4px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #22c55e;
+      }
+
+      .leaflet-popup-content-wrapper {
+        background-color: #1a1a1a;
+        color: #e5e5e5;
+        border: 1px solid #22c55e;
+      }
+
+      .leaflet-popup-tip {
+        background-color: #1a1a1a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <aside>
+        <div class="sidebar-tabs">
+          <button class="tab-button" data-tab="config">
+            <i class="fas fa-cog"></i> Config
+          </button>
+          <button class="tab-button active" data-tab="routing">
+            <i class="fas fa-route"></i> Routing
+          </button>
+          <button class="tab-button" data-tab="recents">
+            <i class="fas fa-history"></i> Recents
+          </button>
+        </div>
+
+        <!-- Config Tab -->
+        <div class="tab-content" id="config-tab">
+          <div class="section">
+            <h3 class="section-title">Business Configuration</h3>
+
+            <div class="form-group">
+              <label for="num-vehicles">Number of Vehicles</label>
+              <input
+                type="number"
+                id="num-vehicles"
+                min="1"
+                placeholder="e.g., 5"
+              />
+              <span class="error-message" id="error-num-vehicles"
+                >Please enter a valid number of vehicles</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="max-trip-duration">Max Trip Duration (minutes)</label>
+              <input
+                type="number"
+                id="max-trip-duration"
+                min="1"
+                placeholder="e.g., 120"
+              />
+              <span class="error-message" id="error-max-trip-duration"
+                >Please enter a valid duration</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="wait-time">Wait Time (minutes)</label>
+              <input
+                type="number"
+                id="wait-time"
+                min="0"
+                placeholder="e.g., 15"
+              />
+              <span class="error-message" id="error-wait-time"
+                >Please enter a valid wait time</span
+              >
+            </div>
+          </div>
+
+          <div class="section">
+            <h3 class="section-title">AI Model Configuration</h3>
+
+            <div class="form-group">
+              <label for="max-epochs">Max Epochs</label>
+              <input
+                type="number"
+                id="max-epochs"
+                min="1"
+                placeholder="e.g., 1000"
+              />
+              <span class="error-message" id="error-max-epochs"
+                >Please enter a valid number of epochs</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="mutation-rate">Mutation Rate (%)</label>
+              <input
+                type="number"
+                id="mutation-rate"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="e.g., 5.0"
+              />
+              <span class="error-message" id="error-mutation-rate"
+                >Please enter a valid percentage (0-100)</span
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="max-no-improvement"
+                >Max Generations Without Improvement</label
+              >
+              <input
+                type="number"
+                id="max-no-improvement"
+                min="1"
+                placeholder="e.g., 50"
+              />
+              <span class="error-message" id="error-max-no-improvement"
+                >Please enter a valid number</span
+              >
+            </div>
+          </div>
+
+          <button class="btn" onclick="saveConfig()">
+            <i class="fas fa-save"></i> Save Configuration
+          </button>
+        </div>
+
+        <!-- Routing Tab -->
+        <div class="tab-content active" id="routing-tab">
+          <div class="section">
+            <div class="info-box">
+              <i class="fas fa-info-circle"></i>
+              Click on the map to add points or enter coordinates manually.
+              Maximum 10 points.
+            </div>
+
+            <div class="add-point-controls">
+              <input
+                type="text"
+                id="manual-coords"
+                placeholder="lat, long (e.g., -23.55, -46.63)"
+              />
+              <button onclick="addManualPoint()">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+
+            <div id="points-list"></div>
+
+            <button class="btn" onclick="calculateRoute()" id="calculate-btn">
+              <i class="fas fa-calculator"></i> Calculate Route
+            </button>
+          </div>
+        </div>
+
+        <!-- Recents Tab -->
+        <div class="tab-content" id="recents-tab">
+          <div class="section">
+            <h3 class="section-title">Recent Calculations</h3>
+            <div id="recents-list">
+              <p style="color: #737373; text-align: center; padding: 20px">
+                No recent calculations yet
+              </p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <div id="map"></div>
+      </main>
+    </div>
+
+    <script>
+      let map;
+      let points = [];
+      let markers = [];
+      const MAX_POINTS = 10;
+
+      // Initialize map
+      function initMap() {
+        map = L.map("map").setView([-23.55, -46.63], 12);
+
+        L.tileLayer(
+          "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+          {
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            subdomains: "abcd",
+            maxZoom: 20,
+          }
+        ).addTo(map);
+
+        // Click to add point
+        map.on("click", function (e) {
+          if (
+            document.getElementById("routing-tab").classList.contains("active")
+          ) {
+            addPoint(e.latlng.lat, e.latlng.lng);
+          }
+        });
+      }
+
+      // Add point
+      function addPoint(lat, lng) {
+        if (points.length >= MAX_POINTS) {
+          alert(`Maximum ${MAX_POINTS} points allowed`);
+          return;
+        }
+
+        const point = {
+          lat: parseFloat(lat.toFixed(6)),
+          lng: parseFloat(lng.toFixed(6)),
+        };
+        points.push(point);
+
+        // Add marker
+        const icon = L.divIcon({
+          className: "custom-div-icon",
+          html: `<div style="background-color: #22c55e; color: #0a0a0a; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid #0a0a0a; box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);">${points.length}</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        const marker = L.marker([lat, lng], { icon: icon })
+          .bindPopup(
+            `<strong>Point ${points.length}</strong><br>${lat.toFixed(
+              6
+            )}, ${lng.toFixed(6)}`
+          )
+          .addTo(map);
+
+        markers.push(marker);
+        updatePointsList();
+      }
+
+      // Add manual point
+      function addManualPoint() {
+        const input = document.getElementById("manual-coords");
+        const coords = input.value.trim().split(",");
+
+        if (coords.length !== 2) {
+          alert("Please enter coordinates in format: lat, long");
+          return;
+        }
+
+        const lat = parseFloat(coords[0].trim());
+        const lng = parseFloat(coords[1].trim());
+
+        if (
+          isNaN(lat) ||
+          isNaN(lng) ||
+          lat < -90 ||
+          lat > 90 ||
+          lng < -180 ||
+          lng > 180
+        ) {
+          alert(
+            "Invalid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180"
+          );
+          return;
+        }
+
+        addPoint(lat, lng);
+        input.value = "";
+      }
+
+      // Remove point
+      function removePoint(index) {
+        points.splice(index, 1);
+        map.removeLayer(markers[index]);
+        markers.splice(index, 1);
+
+        // Update remaining markers
+        markers.forEach((marker, i) => {
+          marker.remove();
+        });
+        markers = [];
+
+        points.forEach((point, i) => {
+          const icon = L.divIcon({
+            className: "custom-div-icon",
+            html: `<div style="background-color: #22c55e; color: #0a0a0a; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid #0a0a0a; box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);">${
+              i + 1
+            }</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+          });
+
+          const marker = L.marker([point.lat, point.lng], { icon: icon })
+            .bindPopup(
+              `<strong>Point ${i + 1}</strong><br>${point.lat.toFixed(
+                6
+              )}, ${point.lng.toFixed(6)}`
+            )
+            .addTo(map);
+
+          markers.push(marker);
+        });
+
+        updatePointsList();
+      }
+
+      // Update points list
+      function updatePointsList() {
+        const list = document.getElementById("points-list");
+
+        if (points.length === 0) {
+          list.innerHTML =
+            '<p style="color: #737373; text-align: center; padding: 20px;">No points added yet</p>';
+          return;
+        }
+
+        list.innerHTML = points
+          .map(
+            (point, i) => `
+                <div class="point-item">
+                    <div class="point-number">${i + 1}</div>
+                    <div class="point-coords">${point.lat.toFixed(
+                      6
+                    )}, ${point.lng.toFixed(6)}</div>
+                    <button class="point-remove" onclick="removePoint(${i})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `
+          )
+          .join("");
+      }
+
+      // Calculate route
+      async function calculateRoute() {
+        if (points.length === 0) {
+          alert("Please add at least one point");
+          return;
+        }
+
+        const btn = document.getElementById("calculate-btn");
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculating...';
+
+        try {
+          const response = await fetch("/api/calculate-route", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              points: points,
+              config: getConfig(),
+            }),
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            alert("Route calculated successfully!");
+            console.log("Result:", result);
+            // Handle result here (draw route, show stats, etc.)
+          } else {
+            alert("Error: " + (result.error || "Failed to calculate route"));
+          }
+        } catch (error) {
+          alert("Error connecting to server: " + error.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-calculator"></i> Calculate Route';
+        }
+      }
+
+      // Get config
+      function getConfig() {
+        // Try to get from localStorage first
+        let savedConfig = {};
+        try {
+          const stored = localStorage.getItem("routingConfig");
+          if (stored) {
+            savedConfig = JSON.parse(stored);
+          }
+        } catch (e) {
+          console.warn("Error loading config from localStorage:", e);
+        }
+
+        // Get current form values, falling back to localStorage values
+        return {
+          numVehicles:
+            parseInt(document.getElementById("num-vehicles").value) || 
+            savedConfig.numVehicles || null,
+          maxTripDuration:
+            parseInt(document.getElementById("max-trip-duration").value) ||
+            savedConfig.maxTripDuration || null,
+          waitTime:
+            parseInt(document.getElementById("wait-time").value) || 
+            savedConfig.waitTime || null,
+          maxEpochs:
+            parseInt(document.getElementById("max-epochs").value) || 
+            savedConfig.maxEpochs || null,
+          mutationRate:
+            parseFloat(document.getElementById("mutation-rate").value) || 
+            savedConfig.mutationRate || null,
+          maxNoImprovement:
+            parseInt(document.getElementById("max-no-improvement").value) ||
+            savedConfig.maxNoImprovement || null,
+        };
+      }
+
+      // Fill fields with config values
+      function fillFieldsFromConfig() {
+        const config = getConfig();
+        
+        // Fill fields with values from getConfig (which includes localStorage fallback)
+        if (config.numVehicles) document.getElementById("num-vehicles").value = config.numVehicles;
+        if (config.maxTripDuration) document.getElementById("max-trip-duration").value = config.maxTripDuration;
+        if (config.waitTime) document.getElementById("wait-time").value = config.waitTime;
+        if (config.maxEpochs) document.getElementById("max-epochs").value = config.maxEpochs;
+        if (config.mutationRate) document.getElementById("mutation-rate").value = config.mutationRate;
+        if (config.maxNoImprovement) document.getElementById("max-no-improvement").value = config.maxNoImprovement;
+      }
+
+      // Save config
+      function saveConfig() {
+        const fields = [
+          { id: "num-vehicles", min: 1 },
+          { id: "max-trip-duration", min: 1 },
+          { id: "wait-time", min: 0 },
+          { id: "max-epochs", min: 1 },
+          { id: "mutation-rate", min: 0, max: 100 },
+          { id: "max-no-improvement", min: 1 },
+        ];
+
+        let isValid = true;
+
+        fields.forEach((field) => {
+          const input = document.getElementById(field.id);
+          const error = document.getElementById(`error-${field.id}`);
+          const value = parseFloat(input.value);
+
+          input.classList.remove("error");
+          error.classList.remove("show");
+
+          if (!input.value.trim() || isNaN(value)) {
+            input.classList.add("error");
+            error.classList.add("show");
+            isValid = false;
+          } else if (field.min !== undefined && value < field.min) {
+            input.classList.add("error");
+            error.classList.add("show");
+            isValid = false;
+          } else if (field.max !== undefined && value > field.max) {
+            input.classList.add("error");
+            error.classList.add("show");
+            isValid = false;
+          }
+        });
+
+        if (isValid) {
+          alert("Configuration saved successfully!");
+          // Save to localStorage or send to server
+          localStorage.setItem("routingConfig", JSON.stringify(getConfig()));
+        }
+      }
+
+      // Tab switching
+      document.querySelectorAll(".tab-button").forEach((button) => {
+        button.addEventListener("click", function () {
+          const tabName = this.getAttribute("data-tab");
+
+          document
+            .querySelectorAll(".tab-button")
+            .forEach((b) => b.classList.remove("active"));
+          document
+            .querySelectorAll(".tab-content")
+            .forEach((c) => c.classList.remove("active"));
+
+          this.classList.add("active");
+          document.getElementById(`${tabName}-tab`).classList.add("active");
+
+          // Change cursor based on tab
+          if (tabName === "routing") {
+            map.getContainer().classList.remove("normal-cursor");
+          } else {
+            map.getContainer().classList.add("normal-cursor");
+          }
+
+          // Fill fields with config when Config tab is focused
+          if (tabName === "config") {
+            fillFieldsFromConfig();
+          }
+        });
+      });
+
+      // Load saved config
+      window.addEventListener("load", () => {
+        const savedConfig = localStorage.getItem("routingConfig");
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig);
+          if (config.numVehicles)
+            document.getElementById("num-vehicles").value = config.numVehicles;
+          if (config.maxTripDuration)
+            document.getElementById("max-trip-duration").value =
+              config.maxTripDuration;
+          if (config.waitTime)
+            document.getElementById("wait-time").value = config.waitTime;
+          if (config.maxEpochs)
+            document.getElementById("max-epochs").value = config.maxEpochs;
+          if (config.mutationRate)
+            document.getElementById("mutation-rate").value =
+              config.mutationRate;
+          if (config.maxNoImprovement)
+            document.getElementById("max-no-improvement").value =
+              config.maxNoImprovement;
+        }
+      });
+
+      // Initialize
+      initMap();
+      updatePointsList();
+    </script>
+  </body>
+</html>
