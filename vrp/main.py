@@ -143,7 +143,7 @@ def get_cost_matrix(locations):
         return None, None
 
 
-def run_vrp(points: list, max_epochs: int, num_vehicles: int, callback: callable = callable):
+def run_vrp(points: list, max_epochs: int, num_vehicles: int, epoch_callback: callable = None):
     duration_matrix, distance_matrix = get_cost_matrix(POINTS)
 
     if duration_matrix and distance_matrix:
@@ -163,7 +163,7 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, callback: callable
             max_trip_duration=MAX_TRIP_DURATION,
             max_trip_distance=MAX_TRIP_DISTANCE,
         )
-        best_solution, best_cost = ga.run()
+        best_solution, best_cost = ga.run(epoch_callback)
 
         final_json_data = generate_json_output(
             best_solution,

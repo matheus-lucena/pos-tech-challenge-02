@@ -476,7 +476,7 @@ class VRPGeneticAlgorithm:
                     break
         return improved_solution
 
-    def run(self):
+    def run(self, epoch_callback: callable = None):
         """Executa o loop do algoritmo genético com otimizações de desempenho."""
         
         cpu_count = multiprocessing.cpu_count()
@@ -548,5 +548,25 @@ class VRPGeneticAlgorithm:
                 count_generations_without_improvement_for_mutation += 1
 
             logging.info('Geração %d - Melhor Custo Global: %.2f', generation + 1, best_cost)
+
+            # Call epoch callback with vehicle points information
+            if epoch_callback:
+                vehicle_points = []
+                for i, route in enumerate(best_solution):
+                    if route:  # Only include vehicles that have routes
+                        vehicle_points.append({
+                            'vehicle_id': i + 1,
+                            'points': len([p for p in route if p != 0]),  # Exclude depot from count
+                            'route': route
+                        })
+                
+                epoch_callback(
+                    epoch=generation + 1,
+                    loss=0,
+                    accuracy=0,
+                    vehicles=len(vehicle_points),
+                    # best_cost=best_cost,
+                    vehicle_data=vehicle_points
+                )
 
         return best_solution, best_cost

@@ -5,7 +5,7 @@
 
 let points = [];
 let markers = [];
-const MAX_POINTS = 10;
+const MAX_POINTS = 400;
 
 /**
  * Add a point to the map and points list
@@ -172,8 +172,8 @@ async function calculateRoute() {
     const result = await response.json();
 
     if (response.ok) {
-      alert("Route calculated successfully!");
-      console.log("Result:", result);
+      // alert("Route calculated successfully!");
+      // console.log("Result:", result);
 
       // Save to recents
       saveToRecents(points);
