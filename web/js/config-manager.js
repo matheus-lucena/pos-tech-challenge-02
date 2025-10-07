@@ -42,18 +42,25 @@ function getConfig() {
 
   return {
     numVehicles:
+      parseInt(document.getElementById("num-vehicles").value) ||
       savedConfig.numVehicles || DEFAULT_CONFIG.numVehicles,
     maxTripDuration:
+      parseInt(document.getElementById("max-trip-duration").value) ||
       savedConfig.maxTripDuration || DEFAULT_CONFIG.maxTripDuration,
     waitTime:
+      parseInt(document.getElementById("wait-time").value) ||
       savedConfig.waitTime || DEFAULT_CONFIG.waitTime,
     maxEpochs:
+      parseInt(document.getElementById("max-epochs").value) ||
       savedConfig.maxEpochs || DEFAULT_CONFIG.maxEpochs,
     mutationRate:
+      parseFloat(document.getElementById("mutation-rate").value) ||
       savedConfig.mutationRate || DEFAULT_CONFIG.mutationRate,
     maxNoImprovement:
+      parseInt(document.getElementById("max-no-improvement").value) ||
       savedConfig.maxNoImprovement || DEFAULT_CONFIG.maxNoImprovement,
     vehicleMaxPoints:
+      parseInt(document.getElementById("vehicle-max-points").value) ||
       savedConfig.vehicleMaxPoints || DEFAULT_CONFIG.vehicleMaxPoints,
     companyAddress: companyAddress || savedConfig.companyAddress || DEFAULT_CONFIG.companyAddress,
   };
