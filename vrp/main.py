@@ -143,9 +143,9 @@ def get_cost_matrix(locations):
         return None, None
 
 
-def run_vrp(points: list, max_epochs: int, num_vehicles: int, epoch_callback: callable = None):
+def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points: int, epoch_callback: callable = None):
     duration_matrix, distance_matrix = get_cost_matrix(POINTS)
-
+    
     if duration_matrix and distance_matrix:
         print("Matriz de distâncias recebida com sucesso.")
 
@@ -156,7 +156,7 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, epoch_callback: ca
             distance_matrix,
             points=points,
             max_vehicles=num_vehicles,
-            vehicle_max_points=VEHICLE_MAX_POINTS,
+            vehicle_max_points=vehicle_max_points,
             generations=max_epochs,
             population_size=POPULATION_SIZE,
             population_heuristic_tax=POPULATION_HEURISTIC_TAX,
@@ -237,7 +237,8 @@ if __name__ == "__main__":
     run_vrp(
         points=POINTS,
         max_epochs=GENERATIONS,
-        num_vehicles=MAX_VEHICLES
+        num_vehicles=MAX_VEHICLES,
+        vehicle_max_points=VEHICLE_MAX_POINTS
     )
 
     end_time = time.time()

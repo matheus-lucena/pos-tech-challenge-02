@@ -19,8 +19,11 @@ function initApp() {
   // Load saved configuration
   loadSavedConfig();
 
-  // Initialize EventSource for real-time updates
+  // Initialize event source for real-time updates
   initEventSource();
+  
+  // Initialize vehicle panel
+  initVehiclePanel();
 }
 
 // Initialize when DOM is loaded

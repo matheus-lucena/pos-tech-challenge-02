@@ -55,6 +55,7 @@ def calculate_route():
         'points': points_list,
         'max_epochs': config['maxEpochs'],
         'num_vehicles': config['numVehicles'],
+        'vehicle_max_points': config['vehicleMaxPoints'],
         'epoch_callback': send_training_event
       },
       daemon=True

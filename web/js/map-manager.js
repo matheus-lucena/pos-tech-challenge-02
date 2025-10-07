@@ -122,23 +122,14 @@ function updateRouteVisualization(data) {
   // Clear existing route lines
   clearRouteLines();
 
-  // Colors for different vehicles
-  const vehicleColors = [
-    '#ff4444', '#44ff44', '#4444ff', '#ffff44',
-    '#ff44ff', '#44ffff', '#ff8844', '#8844ff',
-    '#88ff44', '#ff4488', '#4488ff', '#ffaa44',
-    '#aa44ff', '#44ffaa', '#ff6666', '#66ff66',
-    '#6666ff', '#ffcc44', '#cc44ff', '#44ccff'
-  ];
-
   const config = getConfig()
 
   const route_points = [config.companyAddress, ...points]
 
   data.vehicle_data.forEach((vehicle, index) => {
     if (vehicle.route && vehicle.route.length > 1) {
-      const color = vehicleColors[index % vehicleColors.length];
-      const dashArray = index < vehicleColors.length ? null : '10, 5';
+      const color = getVehicleColor(index);
+      const dashArray = index < VEHICLE_COLORS.length ? null : '10, 5';
       drawVehicleRoute(route_points, vehicle.route, vehicle.vehicle_id, color, dashArray);
     }
   });
@@ -164,10 +155,10 @@ async function drawVehicleRoute(points, route, vehicleId, color = 'white', dashA
   if (routeCoords.length < 2) return;
 
   const coordString = routeCoords.map(c => c.reverse().join(',')).join(';')
-  const result = await fetch(`http://localhost:5001/trip/v1/car/${coordString}?geometries=polyline&overview=full`)
+  const result = await fetch(`http://localhost:5001/trip/v1/car/${coordString}?overview=full`)
   const json = await result.json()
   const geometry = json.trips[0].geometry
-  
+
   // Create polyline for the route
   const polyline = L.Polyline.fromEncoded(geometry, {
     color: color,

@@ -554,10 +554,16 @@ class VRPGeneticAlgorithm:
                 vehicle_points = []
                 for i, route in enumerate(best_solution):
                     if route:  # Only include vehicles that have routes
+                        # Calculate distance and duration for this vehicle's route
+                        trip_cost, trip_duration, trip_distance, _ = self._get_trip_cost(route)
+                        
                         vehicle_points.append({
                             'vehicle_id': i + 1,
                             'points': len([p for p in route if p != 0]),  # Exclude depot from count
-                            'route': route
+                            'route': route,
+                            'distance': round(trip_distance / 1000, 2),  # Convert to km
+                            'duration': round(trip_duration / 60, 1),    # Convert to minutes
+                            'cost': round(trip_cost, 4) if trip_cost != float('inf') else None
                         })
                 
                 epoch_callback(

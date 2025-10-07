@@ -10,6 +10,7 @@ const DEFAULT_CONFIG = {
   maxEpochs: 20,
   mutationRate: 5, // in percentage
   maxNoImprovement: 50,
+  vehicleMaxPoints: 8, // max points per vehicle
   companyAddress: { lat: -23.55, lng: -46.63 }, // Default to São Paulo center
 }
 
@@ -41,23 +42,19 @@ function getConfig() {
 
   return {
     numVehicles:
-      parseInt(document.getElementById("num-vehicles").value) ||
       savedConfig.numVehicles || DEFAULT_CONFIG.numVehicles,
     maxTripDuration:
-      parseInt(document.getElementById("max-trip-duration").value) ||
       savedConfig.maxTripDuration || DEFAULT_CONFIG.maxTripDuration,
     waitTime:
-      parseInt(document.getElementById("wait-time").value) ||
       savedConfig.waitTime || DEFAULT_CONFIG.waitTime,
     maxEpochs:
-      parseInt(document.getElementById("max-epochs").value) ||
       savedConfig.maxEpochs || DEFAULT_CONFIG.maxEpochs,
     mutationRate:
-      parseFloat(document.getElementById("mutation-rate").value) ||
       savedConfig.mutationRate || DEFAULT_CONFIG.mutationRate,
     maxNoImprovement:
-      parseInt(document.getElementById("max-no-improvement").value) ||
       savedConfig.maxNoImprovement || DEFAULT_CONFIG.maxNoImprovement,
+    vehicleMaxPoints:
+      savedConfig.vehicleMaxPoints || DEFAULT_CONFIG.vehicleMaxPoints,
     companyAddress: companyAddress || savedConfig.companyAddress || DEFAULT_CONFIG.companyAddress,
   };
 }
@@ -74,6 +71,7 @@ function fillFieldsFromConfig() {
   document.getElementById("max-epochs").value = config.maxEpochs;
   document.getElementById("mutation-rate").value = config.mutationRate;
   document.getElementById("max-no-improvement").value = config.maxNoImprovement;
+  document.getElementById("vehicle-max-points").value = config.vehicleMaxPoints;
 
   // Handle company address
   const addressToUse = config.companyAddress || DEFAULT_CONFIG.companyAddress;
@@ -94,6 +92,7 @@ function saveConfig() {
     { id: "max-epochs", min: 1 },
     { id: "mutation-rate", min: 0, max: 100 },
     { id: "max-no-improvement", min: 1 },
+    { id: "vehicle-max-points", min: 1 },
   ];
 
   let isValid = true;
