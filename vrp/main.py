@@ -29,7 +29,7 @@ COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 5
 DEPOT_INDEX = 0  # Assuming the first point is the depot
 
 
-def generate_json_output(best_solution, best_cost, duration_matrix, distance_matrix, points):
+def generate_json_output(best_solution, best_cost, duration_matrix, distance_matrix, points, wait_time, num_vehicles, vehicle_max_points, max_trip_duration):
     """Monta a estrutura JSON da solução VRP final."""
     all_routes_data = []
 
@@ -72,7 +72,7 @@ def generate_json_output(best_solution, best_cost, duration_matrix, distance_mat
 
                 # Tempo de parada
                 if point_idx != DEPOT_INDEX:
-                    current_trip_duration += TIME_TO_STOP
+                    current_trip_duration += wait_time
                 else:
                     current_trip_duration += TIME_DEPOT_STOP
 
@@ -107,9 +107,9 @@ def generate_json_output(best_solution, best_cost, duration_matrix, distance_mat
         "number_of_vehicles_used": len(all_routes_data),
         "cost_matrix_based_on": OSRM_BASE_URL,
         "base_constraints": {
-            "max_fleet_vehicles": MAX_VEHICLES,
-            "max_stops_per_trip": VEHICLE_MAX_POINTS,
-            "max_duration_minutes": MAX_TRIP_DURATION / 60
+            "max_fleet_vehicles": num_vehicles,
+            "max_stops_per_trip": vehicle_max_points,
+            "max_duration_minutes": max_trip_duration / 60
         },
         "routes": all_routes_data
     }
@@ -143,14 +143,14 @@ def get_cost_matrix(locations):
         return None, None
 
 
-def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points: int, epoch_callback: callable = None):
-    duration_matrix, distance_matrix = get_cost_matrix(POINTS)
+def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points: int, max_trip_distance: int, max_trip_duration: int, wait_time: int = 3, mutation_rate: float = 0.05, max_no_improvement: int = 50, epoch_callback: callable = None, generate_json: bool = False):
+    duration_matrix, distance_matrix = get_cost_matrix(points)
     
     if duration_matrix and distance_matrix:
         print("Matriz de distâncias recebida com sucesso.")
 
         print(
-            f"\n2. Executando Algoritmo Genético com {MAX_VEHICLES} veículos...")
+            f"\n2. Executando Algoritmo Genético com {num_vehicles} veículos...")
         ga = VRPGeneticAlgorithm(
             duration_matrix,
             distance_matrix,
@@ -158,27 +158,35 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
             max_vehicles=num_vehicles,
             vehicle_max_points=vehicle_max_points,
             generations=max_epochs,
+            max_trip_distance=max_trip_distance,
+            max_trip_duration=max_trip_duration,
+            time_to_stop=wait_time,
+            mutation_rate=mutation_rate,
+            max_no_improvement=max_no_improvement,
             population_size=POPULATION_SIZE,
             population_heuristic_tax=POPULATION_HEURISTIC_TAX,
-            max_trip_duration=MAX_TRIP_DURATION,
-            max_trip_distance=MAX_TRIP_DISTANCE,
         )
         best_solution, best_cost = ga.run(epoch_callback)
 
-        final_json_data = generate_json_output(
-            best_solution,
-            best_cost,
-            duration_matrix,
-            distance_matrix,
-            points
-        )
+        if generate_json:
+            print("\n--- INÍCIO DA SAÍDA JSON PARA LLM ---")
+            final_json_data = generate_json_output(
+                best_solution,
+                best_cost,
+                duration_matrix,
+                distance_matrix,
+                points,
+                wait_time,
+                num_vehicles,
+                vehicle_max_points,
+                max_trip_duration
+            )
 
-        json_output = json.dumps(final_json_data, indent=4, ensure_ascii=False)
+            json_output = json.dumps(final_json_data, indent=4, ensure_ascii=False)
 
-        print("\n--- INÍCIO DA SAÍDA JSON PARA LLM ---")
-        print(json_output)
-        print("--- FIM DA SAÍDA JSON PARA LLM ---")
-        print("\n--- Resultado Final ---")
+            print(json_output)
+            print("--- FIM DA SAÍDA JSON PARA LLM ---")
+            print("\n--- Resultado Final ---")
 
         print(
             f"Melhor custo de solução encontrado: {best_cost:.2f} (em unidades normalizadas)")
@@ -220,12 +228,12 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
                 print(f"       Rota (índices): {travel}")
 
                 formatted_travel_points = "/".join(
-                    [f"{POINTS[idx][0]},{POINTS[idx][1]}" for idx in travel])
+                    [f"{points[idx][0]},{points[idx][1]}" for idx in travel])
                 print(
                     f"       String formatada das paradas da viagem: {formatted_travel_points}")
 
             formatted_route_points = "/".join(
-                [f"{POINTS[idx][0]},{POINTS[idx][1]}" for idx in route])
+                [f"{points[idx][0]},{points[idx][1]}" for idx in route])
             print(
                 f"   String formatada das paradas da rota do veículo: {formatted_route_points}")
 
@@ -242,7 +250,13 @@ if __name__ == "__main__":
         max_epochs=GENERATIONS,
         num_vehicles=MAX_VEHICLES,
         vehicle_max_points=VEHICLE_MAX_POINTS,
-        epoch_callback=noop
+        max_trip_distance=MAX_TRIP_DISTANCE,
+        max_trip_duration=MAX_TRIP_DURATION,
+        max_no_improvement=COUNT_GENERATIONS_WITHOUT_IMPROVEMENT,
+        mutation_rate=MUTATION_RATE,
+        wait_time=TIME_TO_STOP,
+        epoch_callback=noop,
+        generate_json=True
     )
 
     end_time = time.time()

@@ -6,6 +6,7 @@
 const DEFAULT_CONFIG = {
   numVehicles: 3,
   maxTripDuration: 480, // in minutes
+  maxTripDistance: 50000, // in meters
   waitTime: 10, // in minutes
   maxEpochs: 20,
   mutationRate: 5, // in percentage
@@ -47,6 +48,9 @@ function getConfig() {
     maxTripDuration:
       parseInt(document.getElementById("max-trip-duration").value) ||
       savedConfig.maxTripDuration || DEFAULT_CONFIG.maxTripDuration,
+    maxTripDistance:
+      parseInt(document.getElementById("max-trip-distance").value) ||
+      savedConfig.maxTripDistance || DEFAULT_CONFIG.maxTripDistance,
     waitTime:
       parseInt(document.getElementById("wait-time").value) ||
       savedConfig.waitTime || DEFAULT_CONFIG.waitTime,
@@ -74,6 +78,7 @@ function fillFieldsFromConfig() {
 
   document.getElementById("num-vehicles").value = config.numVehicles;
   document.getElementById("max-trip-duration").value = config.maxTripDuration;
+  document.getElementById("max-trip-distance").value = config.maxTripDistance;
   document.getElementById("wait-time").value = config.waitTime;
   document.getElementById("max-epochs").value = config.maxEpochs;
   document.getElementById("mutation-rate").value = config.mutationRate;
@@ -95,6 +100,7 @@ function saveConfig() {
   const fields = [
     { id: "num-vehicles", min: 1 },
     { id: "max-trip-duration", min: 1 },
+    { id: "max-trip-distance", min: 1 },
     { id: "wait-time", min: 0 },
     { id: "max-epochs", min: 1 },
     { id: "mutation-rate", min: 0, max: 100 },

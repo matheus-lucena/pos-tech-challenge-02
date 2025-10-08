@@ -11,6 +11,7 @@ event_queue = Queue(maxsize=1000)
 
 def send_training_event(epoch, **kwargs):
     event_data = {
+        'status': 'training',
         'epoch': epoch,
         **kwargs
     }
@@ -41,21 +42,39 @@ def calculate_route():
     if not points:
         return {"error": "No points provided"}, 400
 
+    # Format address
     company_address = config['companyAddress']
     company_address = (company_address['lat'], company_address['lng'])
     points_list = [(p['lat'], p['lng']) for p in points]
     
     points_list.insert(0, company_address)
     
+    # Format max trip duration
+    max_trip_duration = config['maxTripDuration']
+    max_trip_duration = max_trip_duration * 60  # Convert minutes to seconds
+    
+    # Format max wait time
+    wait_time = config['waitTime']
+    wait_time = wait_time * 60  # Convert minutes to seconds
+
+    def run_with_completion():
+        run_vrp(
+            points=points_list,
+            max_epochs=config['maxEpochs'],
+            num_vehicles=config['numVehicles'],
+            vehicle_max_points=config['vehicleMaxPoints'],
+            max_trip_distance=config['maxTripDistance'],
+            wait_time=wait_time,
+            max_trip_duration=max_trip_duration,
+            mutation_rate=config['mutationRate'] / 100.0,
+            max_no_improvement=config['maxNoImprovement'],
+            epoch_callback=send_training_event
+        )
+        # Send finished message when training completes
+        event_queue.put({"status": "finished"})
+
     training_thread = threading.Thread(
-      target=run_vrp,
-      kwargs={
-        'points': points_list,
-        'max_epochs': config['maxEpochs'],
-        'num_vehicles': config['numVehicles'],
-        'vehicle_max_points': config['vehicleMaxPoints'],
-        'epoch_callback': send_training_event
-      },
+      target=run_with_completion,
       daemon=True
     )
     training_thread.start()

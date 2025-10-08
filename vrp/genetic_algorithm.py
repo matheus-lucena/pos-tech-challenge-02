@@ -8,16 +8,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 POPULATION_HEURISTIC_TAX = 0.5
 TWO_OPT_FREQUENCY = 100 # Apply local search every X generations
 TIME_DEPOT_STOP = 180 # 3 minutes in seconds per stop
-TIME_TO_STOP = 180 # 3 minutes in seconds per stop
 
-COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 50
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 5
 
 DEPOT_INDEX = 0
 
 # --- CLASSE DO ALGORITMO GENÉTICO VRP ---
 class VRPGeneticAlgorithm:
-    def __init__(self, duration_matrix, distance_matrix, points: list, max_vehicles: int, vehicle_max_points: int, generations: int, population_size: int, population_heuristic_tax: float, max_trip_duration: int, max_trip_distance: int, mutation_rate=0.05, time_weight=0.5, distance_weight=0.5):
+    def __init__(self, duration_matrix, distance_matrix, points: list, max_vehicles: int, vehicle_max_points: int, generations: int, population_size: int, population_heuristic_tax: float, max_trip_duration: int, max_trip_distance: int, time_to_stop: int, mutation_rate=0.05, max_no_improvement=50, time_weight=0.5, distance_weight=0.5):
         self.max_vehicles = max_vehicles
         self.vehicle_max_points = vehicle_max_points
         self.mutation_rate = mutation_rate
@@ -26,6 +24,8 @@ class VRPGeneticAlgorithm:
         self.heuristic_tax = population_heuristic_tax
         self.max_trip_duration = max_trip_duration
         self.max_trip_distance = max_trip_distance
+        self.time_to_stop = time_to_stop
+        self.max_no_improvement = max_no_improvement
 
         self.duration_matrix = duration_matrix
         self.distance_matrix = distance_matrix
@@ -175,7 +175,7 @@ class VRPGeneticAlgorithm:
             current_trip_distance += self.distance_matrix[last_point_idx][point_idx]
             
             if point_idx != DEPOT_INDEX:
-                current_trip_duration += TIME_TO_STOP
+                current_trip_duration += self.time_to_stop
             elif point_idx == DEPOT_INDEX and last_point_idx != DEPOT_INDEX:
                 current_trip_duration += TIME_DEPOT_STOP
                 
@@ -493,8 +493,8 @@ class VRPGeneticAlgorithm:
         for generation in range(self.generations):
             new_population = []
             
-            if count_generations_without_improvement >= COUNT_GENERATIONS_WITHOUT_IMPROVEMENT:
-                logging.info("Geração %d: Sem melhoria por %d gerações. Reiniciando população.", generation + 1, COUNT_GENERATIONS_WITHOUT_IMPROVEMENT)
+            if count_generations_without_improvement >= self.max_no_improvement:
+                logging.info("Geração %d: Sem melhoria por %d gerações. Reiniciando população.", generation + 1, self.max_no_improvement)
                 self.population = self.create_initial_population_hybrid()
                 fitness_cache = [self.calculate_fitness(sol) for sol in self.population]
                 count_generations_without_improvement = 0

@@ -3,19 +3,19 @@
  */
 function initEventSource() {
   const eventSource = new EventSource('/stream');
-  
-  eventSource.onmessage = function(event) {
+
+  eventSource.onmessage = function (event) {
     const data = JSON.parse(event.data);
     console.log('Training update:', data);
-    
+
     // Update UI with route visualization
     if (data.vehicle_data && Array.isArray(data.vehicle_data)) {
       updateRouteVisualization(data);
       showVehiclePanel(data.vehicle_data);
     }
   };
-  
-  eventSource.onerror = function(error) {
+
+  eventSource.onerror = function (error) {
     console.warn('EventSource error:', error);
   };
 }
@@ -27,12 +27,10 @@ function initEventSource() {
 function showVehiclePanel(vehicleData) {
   const panel = document.getElementById('vehicle-panel');
   const vehicleList = document.getElementById('vehicle-list');
- 
-  console.log({vehicleData})
 
   // Clear existing content
   vehicleList.innerHTML = '';
-  
+
   // Create vehicle items using real data from genetic algorithm
   vehicleData.forEach((vehicle, index) => {
     const color = getVehicleColor(index);
@@ -42,7 +40,7 @@ function showVehiclePanel(vehicleData) {
     });
     vehicleList.appendChild(vehicleItem);
   });
-  
+
   // Show the panel
   panel.classList.remove('hidden');
 }
@@ -57,12 +55,12 @@ function showVehiclePanel(vehicleData) {
 function createVehicleItem(vehicle, color, routeData = null) {
   const item = document.createElement('div');
   item.className = 'vehicle-item';
-  
+
   // Use real route data or placeholders
-  const distance = routeData ? routeData.distance : Math.round(Math.random() * 50 + 10);
-  const duration = routeData ? routeData.duration : Math.round(Math.random() * 120 + 30);
+  const distance = routeData.distance || "?"
+  const duration = routeData.duration || "?"
   const stops = vehicle.points || 0;
-  
+
   item.innerHTML = `
     <div class="vehicle-header">
       <div class="vehicle-color" style="background-color: ${color}"></div>
@@ -86,7 +84,7 @@ function createVehicleItem(vehicle, color, routeData = null) {
       </div>
     </div>
   `;
-  
+
   return item;
 }
 
