@@ -212,7 +212,7 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
 
             for j, travel in enumerate(travels):
 
-                trip_cost, total_travel_duration, total_travel_distance, stops = ga._get_trip_cost(
+                trip_cost, total_travel_duration, total_travel_distance = ga._get_trip_cost(
                     travel)
 
                 if total_travel_duration == 0:
@@ -220,7 +220,6 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
 
                 print(f"     Viagem {j+1}:")
                 print(f"       Paradas: {travel[1:-1]}")
-                print(f"       Total de paradas de entrega: {stops}")
                 print(
                     f"       Tempo de viagem: {total_travel_duration / 60:.2f} minutos")
                 print(
