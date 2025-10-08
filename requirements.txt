@@ -1,4 +1,5 @@
 Flask
+flask-socketio
 google-generativeai
 python-dotenv
 reportlab

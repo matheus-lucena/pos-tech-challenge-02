@@ -1,13 +1,11 @@
-from flask import Flask, Response, send_file, request
-import time
+from flask import Flask, send_file, request
+from flask_socketio import SocketIO
 import json
-from queue import Queue
 import threading
 from vrp.main import run_vrp
 
 app = Flask(__name__, static_folder='web', static_url_path='')
-
-event_queue = Queue(maxsize=1000)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 def send_training_event(epoch, **kwargs):
     event_data = {
@@ -15,23 +13,19 @@ def send_training_event(epoch, **kwargs):
         'epoch': epoch,
         **kwargs
     }
-    event_queue.put(event_data)
+    socketio.emit('training_update', event_data)
 
 @app.route('/')
 def index():
     return send_file('web/index.html')
 
-@app.route('/stream')
-def stream():
-    def event_stream():
-        while True:
-            # Get event from queue (blocks until available)
-            if not event_queue.empty():
-                event_data = event_queue.get()
-                yield f"data: {json.dumps(event_data)}\n\n"
-            time.sleep(0.1)  # Small delay to prevent busy waiting
-    
-    return Response(event_stream(), mimetype='text/event-stream')
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
 
 @app.route('/calculate-route', methods=['POST'])
 def calculate_route():
@@ -71,7 +65,7 @@ def calculate_route():
             epoch_callback=send_training_event
         )
         # Send finished message when training completes
-        event_queue.put({"status": "finished"})
+        socketio.emit('training_update', {"status": "finished"})
 
     training_thread = threading.Thread(
       target=run_with_completion,
@@ -82,5 +76,5 @@ def calculate_route():
     return {"result": "Route calculation started"}, 202
 
 if __name__ == '__main__':
-    # Run Flask server
-    app.run(debug=True, threaded=True, port=5002)
+    print("Flask-SocketIO server starting on http://localhost:5002")
+    socketio.run(app, debug=True, port=5002)

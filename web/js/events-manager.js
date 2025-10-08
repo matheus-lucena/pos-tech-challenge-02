@@ -1,11 +1,15 @@
 /**
- * Initialize EventSource for real-time updates
+ * Initialize Socket.IO for real-time updates
  */
 function initEventSource() {
-  const eventSource = new EventSource('/stream');
+  const socket = io();
 
-  eventSource.onmessage = function (event) {
-    const data = JSON.parse(event.data);
+  socket.on('connect', function () {
+    console.log('Socket.IO connected');
+  });
+
+  socket.on('training_update', function (data) {
+    console.log('Training update:', data);
 
     // Check for completion status
     if (data.status === 'finished') {
@@ -14,16 +18,19 @@ function initEventSource() {
     }
 
     // Update UI with route visualization
-    console.log('Training update:', data);
     if (data.vehicle_data && Array.isArray(data.vehicle_data)) {
       updateRouteVisualization(data);
       showVehiclePanel(data.vehicle_data);
     }
-  };
+  });
 
-  eventSource.onerror = function (error) {
-    console.warn('EventSource error:', error);
-  };
+  socket.on('disconnect', function () {
+    console.log('Socket.IO disconnected');
+  });
+
+  socket.on('connect_error', function (error) {
+    console.warn('Socket.IO connection error:', error);
+  });
 }
 
 /**
