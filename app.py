@@ -9,11 +9,9 @@ app = Flask(__name__, static_folder='web', static_url_path='')
 
 event_queue = Queue(maxsize=1000)
 
-def send_training_event(epoch, loss, accuracy, **kwargs):
+def send_training_event(epoch, **kwargs):
     event_data = {
         'epoch': epoch,
-        'loss': round(loss, 4),
-        'accuracy': round(accuracy, 4),
         **kwargs
     }
     event_queue.put(event_data)

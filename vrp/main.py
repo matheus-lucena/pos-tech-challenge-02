@@ -233,12 +233,16 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
 # --- EXECUÇÃO PRINCIPAL ---
 if __name__ == "__main__":
     start_time = time.time()
+    
+    def noop(*args, **kwargs):
+        pass
 
     run_vrp(
         points=POINTS,
         max_epochs=GENERATIONS,
         num_vehicles=MAX_VEHICLES,
-        vehicle_max_points=VEHICLE_MAX_POINTS
+        vehicle_max_points=VEHICLE_MAX_POINTS,
+        epoch_callback=noop
     )
 
     end_time = time.time()

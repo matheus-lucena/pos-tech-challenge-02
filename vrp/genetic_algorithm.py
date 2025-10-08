@@ -568,10 +568,7 @@ class VRPGeneticAlgorithm:
                 
                 epoch_callback(
                     epoch=generation + 1,
-                    loss=0,
-                    accuracy=0,
                     vehicles=len(vehicle_points),
-                    # best_cost=best_cost,
                     vehicle_data=vehicle_points
                 )
 
