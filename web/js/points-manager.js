@@ -49,31 +49,66 @@ function addPoint(lat, lng) {
  */
 function addManualPoint() {
   const input = document.getElementById("manual-coords");
-  const coords = input.value.trim().split(",");
-
-  if (coords.length !== 2) {
-    alert("Please enter coordinates in format: lat, long");
+  const inputValue = input.value.trim();
+  
+  if (!inputValue) {
+    alert("Please enter coordinates");
     return;
   }
 
-  const lat = parseFloat(coords[0].trim());
-  const lng = parseFloat(coords[1].trim());
+  // Check if there are multiple coordinate pairs separated by semicolons
+  const coordinatePairs = inputValue.split(";").map(pair => pair.trim()).filter(pair => pair);
+  
+  let addedCount = 0;
+  let errorCount = 0;
+  
+  coordinatePairs.forEach((pair, index) => {
+    const coords = pair.split(",");
 
-  if (
-    isNaN(lat) ||
-    isNaN(lng) ||
-    lat < -90 ||
-    lat > 90 ||
-    lng < -180 ||
-    lng > 180
-  ) {
-    alert(
-      "Invalid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180"
-    );
-    return;
+    if (coords.length !== 2) {
+      errorCount++;
+      console.warn(`Invalid format for pair ${index + 1}: "${pair}"`);
+      return;
+    }
+
+    const lat = parseFloat(coords[0].trim());
+    const lng = parseFloat(coords[1].trim());
+
+    if (
+      isNaN(lat) ||
+      isNaN(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      errorCount++;
+      console.warn(`Invalid coordinates for pair ${index + 1}: "${pair}"`);
+      return;
+    }
+
+    if (points.length >= MAX_POINTS) {
+      alert(`Maximum ${MAX_POINTS} points allowed. Added ${addedCount} points.`);
+      return;
+    }
+
+    addPoint(lat, lng);
+    addedCount++;
+  });
+
+  // Show summary message
+  if (coordinatePairs.length > 1) {
+    if (addedCount > 0 && errorCount === 0) {
+      console.log(`Successfully added ${addedCount} points`);
+    } else if (addedCount > 0 && errorCount > 0) {
+      alert(`Added ${addedCount} points, ${errorCount} failed. Check console for details.`);
+    } else if (errorCount > 0) {
+      alert(`Failed to add points. Please check the format: "lat,lng;lat,lng"`);
+    }
+  } else if (addedCount === 0) {
+    alert("Please enter coordinates in format: lat, long (or multiple: lat,lng;lat,lng)");
   }
 
-  addPoint(lat, lng);
   input.value = "";
 }
 
@@ -250,6 +285,64 @@ function loadRecentRoute(routeId) {
   }
 }
 
+/**
+ * Copy route points as formatted string to clipboard
+ * @param {number} routeId - ID of the route to copy
+ */
+function copyRoutePoints(routeId) {
+  try {
+    const recents = JSON.parse(localStorage.getItem("recentRoutes") || "[]");
+    const route = recents.find(r => r.id === routeId);
+
+    if (route && route.points) {
+      const pointsString = route.points
+        .map(point => `${point.lat},${point.lng}`)
+        .join(';');
+
+      // Copy to clipboard
+      navigator.clipboard.writeText(pointsString).then(() => {
+        // Show temporary feedback
+        showCopyFeedback(routeId);
+      }).catch(err => {
+        // Fallback for older browsers
+        const textArea = document.createElement("textarea");
+        textArea.value = pointsString;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          showCopyFeedback(routeId);
+        } catch (fallbackErr) {
+          console.error('Failed to copy points:', fallbackErr);
+          alert('Failed to copy. Your browser may not support this feature.');
+        }
+        document.body.removeChild(textArea);
+      });
+    }
+  } catch (error) {
+    console.warn("Error copying route points:", error);
+  }
+}
+
+/**
+ * Show temporary visual feedback when points are copied
+ * @param {number} routeId - ID of the route that was copied
+ */
+function showCopyFeedback(routeId) {
+  const copyBtn = document.querySelector(`[data-route-id="${routeId}"] .copy-btn`);
+  if (copyBtn) {
+    const originalIcon = copyBtn.innerHTML;
+    copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+    copyBtn.style.color = 'var(--color-success)';
+    
+    setTimeout(() => {
+      copyBtn.innerHTML = originalIcon;
+      copyBtn.style.color = '';
+    }, 1000);
+  }
+}
+
 // Export functions to global scope for compatibility
 window.addPoint = addPoint;
 window.addManualPoint = addManualPoint;
@@ -258,3 +351,4 @@ window.updatePointsList = updatePointsList;
 window.calculateRoute = calculateRoute;
 window.saveToRecents = saveToRecents;
 window.loadRecentRoute = loadRecentRoute;
+window.copyRoutePoints = copyRoutePoints;

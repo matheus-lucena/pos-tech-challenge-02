@@ -488,11 +488,19 @@ main {
   margin-bottom: 10px;
   cursor: pointer;
   transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .recents-item:hover {
   border-color: var(--color-primary);
   transform: translateX(4px);
+}
+
+.recents-item-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .recents-item-title {
@@ -504,6 +512,37 @@ main {
 .recents-item-meta {
   color: var(--color-text-muted);
   font-size: 0.85rem;
+}
+
+.recents-item-actions {
+  margin-left: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.copy-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.copy-btn:hover {
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: scale(1.05);
+}
+
+.copy-btn:active {
+  transform: scale(0.95);
 }
 
 /* ===== Scrollbar ===== */

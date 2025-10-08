@@ -61,16 +61,22 @@ function loadRecents() {
     }
     
     recentsList.innerHTML = recents.map(route => `
-      <div class="recents-item" 
-           onclick="loadRecentRoute(${route.id})"
+      <div class="recents-item" data-route-id="${route.id}"
            onmouseenter="showRoutePreview(${route.id})"
            onmouseleave="hideRoutePreview()">
-        <div class="recents-item-title">
-          <i class="fas fa-route"></i> 
-          Rota com ${route.pointsCount} pontos
+        <div class="recents-item-content" onclick="loadRecentRoute(${route.id})">
+          <div class="recents-item-title">
+            <i class="fas fa-route"></i> 
+            Rota com ${route.pointsCount} pontos
+          </div>
+          <div class="recents-item-meta">
+            <i class="fas fa-clock"></i> ${route.dateFormatted}
+          </div>
         </div>
-        <div class="recents-item-meta">
-          <i class="fas fa-clock"></i> ${route.dateFormatted}
+        <div class="recents-item-actions">
+          <button class="copy-btn" onclick="event.stopPropagation(); copyRoutePoints(${route.id})" title="Copy points as text">
+            <i class="fas fa-copy"></i>
+          </button>
         </div>
       </div>
     `).join('');
