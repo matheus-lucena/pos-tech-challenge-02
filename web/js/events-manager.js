@@ -6,9 +6,15 @@ function initEventSource() {
 
   eventSource.onmessage = function (event) {
     const data = JSON.parse(event.data);
-    console.log('Training update:', data);
+
+    // Check for completion status
+    if (data.status === 'finished') {
+      alert('Completed!');
+      return;
+    }
 
     // Update UI with route visualization
+    console.log('Training update:', data);
     if (data.vehicle_data && Array.isArray(data.vehicle_data)) {
       updateRouteVisualization(data);
       showVehiclePanel(data.vehicle_data);
