@@ -6,7 +6,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 POPULATION_HEURISTIC_TAX = 0.5
-TWO_OPT_FREQUENCY = 100 # Apply local search every X generations
+TWO_OPT_FREQUENCY = 10 # Apply local search every X generations
 TIME_DEPOT_STOP = 180 # 3 minutes in seconds per stop
 
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 5
@@ -29,11 +29,35 @@ class VRPGeneticAlgorithm:
 
         self.duration_matrix = duration_matrix
         self.distance_matrix = distance_matrix
-        self.points_coordinates = points # <--- CORREÇÃO: PONTOS AGORA ACESSÍVEIS
+        self.points_coordinates = points 
         self.num_points = len(points)
         self.time_weight = time_weight
         self.distance_weight = distance_weight
-        self.population = self.create_initial_population_hybrid() # Alterado para híbrido
+        self.population = self.create_initial_population_hybrid() 
+
+    # --- FUNÇÃO AUXILIAR DE LIMPEZA DE ROTA ---
+    def _clean_route(self, route):
+        """Remove depósitos duplicados (0, 0) e garante que rotas vazias retornem []."""
+        if not route:
+            return []
+            
+        # Garante que começa e termina com DEPOT_INDEX
+        if route[0] != DEPOT_INDEX or route[-1] != DEPOT_INDEX:
+            # Rota malformada, mas tentamos limpar duplicados internos primeiro
+            pass 
+        
+        clean_route = [route[0]]
+        for p in route[1:]:
+            # Evita duplicidade e garante que apenas o depot final é o último
+            if p == DEPOT_INDEX and clean_route[-1] == DEPOT_INDEX:
+                continue
+            clean_route.append(p)
+            
+        # Se a rota é [0, 0] ou apenas [0], retorna vazia.
+        if len(clean_route) <= 2 and all(p == DEPOT_INDEX for p in clean_route):
+            return []
+            
+        return clean_route
 
     # --- MÉTODOS DE GERAÇÃO DE POPULAÇÃO ---
 
@@ -67,7 +91,6 @@ class VRPGeneticAlgorithm:
             else:
                 final_solution.append([])
                 
-        # Garante que o tamanho do cromossomo seja MAX_VEHICLES
         final_solution = final_solution[:self.max_vehicles]
         while len(final_solution) < self.max_vehicles:
             final_solution.append([])
@@ -159,44 +182,62 @@ class VRPGeneticAlgorithm:
     # --- FUNÇÕES DE CUSTO ---
 
     def _get_trip_cost(self, trip_points):
-        """Calcula o custo normalizado e a viabilidade de uma única viagem [0, p1, ..., 0]."""
+        """
+        Calcula o custo normalizado e a viabilidade de uma única viagem [0, p1, ..., 0].
+        O custo agora penaliza fortemente viagens próximas do limite e favorece viagens mais balanceadas.
+        """
         if len(trip_points) < 2 or trip_points[0] != DEPOT_INDEX or trip_points[-1] != DEPOT_INDEX:
-            return float('inf'), 0, 0, 0
+            return float('inf'), 0, 0
 
         current_trip_duration = 0
         current_trip_distance = 0
+        current_trip_stops = len([p for p in trip_points if p != DEPOT_INDEX])
+        
+        if current_trip_stops > self.vehicle_max_points:
+            return float('inf'), 0, 0
 
-        last_point_idx = trip_points[0]
+        depot_indices = [i for i, x in enumerate(trip_points) if x == DEPOT_INDEX]
+        if len(depot_indices) < 2:
+            return float('inf'), 0, 0
+        
         current_trip_duration += TIME_DEPOT_STOP
-       
-        routes = []
-        current_route = []
-        for idx, point in enumerate(trip_points):
-            current_route.append(point)
-            if point == DEPOT_INDEX and len(current_route) > 1:
-                delivery_points = [p for p in current_route if p != DEPOT_INDEX]
-                if len(delivery_points) > self.vehicle_max_points:
-                    return float('inf'), 0, 0
-                routes.append(current_route)
-                current_route = [DEPOT_INDEX] if idx != len(trip_points) - 1 else []
 
-        for route in routes:
-            last_point_idx = route[0]
-            for point_idx in route[1:]:
+        for i in range(len(depot_indices) - 1):
+            start_idx = depot_indices[i]
+            end_idx = depot_indices[i+1]
+            route_segment = trip_points[start_idx:end_idx+1]
+            
+            last_point_idx = route_segment[0] 
+            
+            for point_idx in route_segment[1:]:
                 current_trip_duration += self.duration_matrix[last_point_idx][point_idx]
                 current_trip_distance += self.distance_matrix[last_point_idx][point_idx]
+                
                 if point_idx != DEPOT_INDEX:
                     current_trip_duration += self.time_to_stop
                 elif point_idx == DEPOT_INDEX and last_point_idx != DEPOT_INDEX:
                     current_trip_duration += TIME_DEPOT_STOP
+                    
                 last_point_idx = point_idx
+
+        # Penalidade suave para viagens próximas do limite (exponencial)
+        duration_ratio = current_trip_duration / self.max_trip_duration
+        distance_ratio = current_trip_distance / self.max_trip_distance
 
         if current_trip_duration > self.max_trip_duration or current_trip_distance > self.max_trip_distance:
             return float('inf'), 0, 0
 
-        normalized_duration = current_trip_duration / self.max_trip_duration
-        normalized_distance = current_trip_distance / self.max_trip_distance
-        trip_cost = (self.time_weight * normalized_duration) + (self.distance_weight * normalized_distance)
+        # Penalidade extra para viagens que chegam muito perto do limite (exponencial)
+        penalty = 1.0
+        if duration_ratio > 0.9 or distance_ratio > 0.9:
+            penalty += 5 * ((max(duration_ratio, distance_ratio) - 0.9) / 0.1) ** 2
+
+        # Custo ponderado e penalizado
+        trip_cost = penalty * (
+            self.time_weight * duration_ratio +
+            self.distance_weight * distance_ratio
+        )
+
         return trip_cost, current_trip_duration, current_trip_distance
 
     def calculate_fitness(self, solution):
@@ -211,6 +252,7 @@ class VRPGeneticAlgorithm:
              return float('inf')
         
         visited_points = set()
+        all_delivery_points = []
         
         for vehicle_route in solution:
             if not vehicle_route:
@@ -219,15 +261,16 @@ class VRPGeneticAlgorithm:
             depot_indices = [i for i, x in enumerate(vehicle_route) if x == DEPOT_INDEX]
             
             if vehicle_route[0] != DEPOT_INDEX or vehicle_route[-1] != DEPOT_INDEX or len(depot_indices) < 2:
-                # O warning aqui é útil para debugging, mas o retorno é float('inf')
-                # logging.warning('Rota de veículo malformada. Rota: %s', vehicle_route)
-                return float('inf')
+                 return float('inf')
 
             for i in range(len(depot_indices) - 1):
                 start_idx = depot_indices[i]
                 end_idx = depot_indices[i+1]
                 trip_points = vehicle_route[start_idx:end_idx+1]
                 
+                if len(trip_points) <= 2:
+                    continue
+
                 trip_cost, _, _ = self._get_trip_cost(trip_points)
                 
                 if trip_cost == float('inf'):
@@ -235,8 +278,15 @@ class VRPGeneticAlgorithm:
 
                 total_solution_cost += trip_cost
                 
-                visited_points.update(p for p in trip_points if p != DEPOT_INDEX)
+                delivery_points = [p for p in trip_points if p != DEPOT_INDEX]
+                visited_points.update(delivery_points)
+                all_delivery_points.extend(delivery_points)
         
+        # --- RESTRIÇÃO RÍGIDA 4: DUPLICIDADE DE PONTOS ---
+        if len(all_delivery_points) != len(visited_points):
+            return float('inf')
+            
+        # --- RESTRIÇÃO RÍGIDA 5: COBERTURA COMPLETA ---
         all_required_points = set(range(1, self.num_points))
         if visited_points != all_required_points:
             return float('inf')
@@ -258,10 +308,10 @@ class VRPGeneticAlgorithm:
 
     def crossover(self, parent1, parent2):
         """
-        Crossover VRP com limite de MAX_VEHICLES e garantia de tamanho do cromossomo.
+        Crossover VRP. Garante a unicidade e o respeito à capacidade de pontos por viagem.
         """
         if not parent1 or not parent2:
-            return random.choice([parent1, parent2])
+            return [r[:] for r in random.choice([parent1, parent2])]
 
         parent1_points = [p for route in parent1 for p in route if p != DEPOT_INDEX]
         parent2_points = [p for route in parent2 for p in route if p != DEPOT_INDEX]
@@ -272,67 +322,229 @@ class VRPGeneticAlgorithm:
         points_to_assign = all_unique_points[:]
         
         for parent_route in parent1:
-            if not parent_route or len(child) >= self.max_vehicles:
+            if len(child) >= self.max_vehicles:
                 break
+            
+            if not parent_route:
+                child.append([])
+                continue
 
             depot_indices = [i for i, x in enumerate(parent_route) if x == DEPOT_INDEX]
-            if len(depot_indices) < 2: continue
+            if len(depot_indices) < 2: 
+                child.append([])
+                continue
                 
             trips_stops = []
             for i in range(len(depot_indices) - 1):
                 trip_points = parent_route[depot_indices[i]:depot_indices[i+1]+1]
                 trips_stops.append(len(trip_points) - 2)
 
-            child_route = [DEPOT_INDEX]
+            child_route = []
             
             for num_stops in trips_stops:
-                current_trip_stops = 0
-                while current_trip_stops < num_stops and points_to_assign:
-                    child_route.append(points_to_assign.pop(0))
-                    current_trip_stops += 1
-                child_route.append(DEPOT_INDEX)
+                current_trip_points = []
+                
+                for _ in range(num_stops):
+                    if points_to_assign:
+                        current_trip_points.append(points_to_assign.pop(0))
+                    else:
+                        break
+                
+                if current_trip_points:
+                    current_trip = [DEPOT_INDEX] + current_trip_points + [DEPOT_INDEX]
+                    child_route.extend(current_trip)
             
-            child.append(child_route)
+            if child_route:
+                # Limpa DEPOT_INDEX duplicados
+                final_route = [child_route[0]]
+                for i in range(1, len(child_route)):
+                    if child_route[i] == DEPOT_INDEX and child_route[i-1] == DEPOT_INDEX:
+                        continue
+                    final_route.append(child_route[i])
 
-        if points_to_assign:
-            temp_points = points_to_assign[:]
+                child.append(final_route)
+            else:
+                 child.append([])
+
+
+        # 4. Distribuição de pontos remanescentes (GARANTIA DE COBERTURA TOTAL)
+        points_removed = []
+        
+        # 4a. Tenta preencher rotas existentes (criando novas viagens)
+        temp_points = points_to_assign[:]
+        
+        for route_idx, route in enumerate(child):
+            if not temp_points: break
             
-            for route in child:
-                current_stops = len([p for p in route if p != DEPOT_INDEX])
-                while current_stops < self.vehicle_max_points and temp_points:
-                    route.insert(len(route) - 1, temp_points.pop(0))
-                    current_stops += 1
+            if not route: continue 
+                
+            while temp_points:
+                new_trip_points = temp_points[:self.vehicle_max_points] 
+                
+                if not new_trip_points: break
+                    
+                temp_points = temp_points[self.vehicle_max_points:]
+                
+                new_trip = [DEPOT_INDEX] + new_trip_points + [DEPOT_INDEX]
+                child[route_idx].extend(new_trip)
+                points_removed.extend(new_trip_points)
+                
+                # Limpa depósitos duplicados
+                child[route_idx] = self._clean_route(child[route_idx])
+
+        # Atualiza a lista principal de pontos restantes
+        points_to_assign = [p for p in points_to_assign if p not in points_removed]
+
+
+        # 4b. Cria novas rotas/veículos para pontos restantes (GARANTINDO COBERTURA)
+        while points_to_assign:
             
-            while temp_points and len(child) < self.max_vehicles:
+            target_idx = len(child)
+            
+            if target_idx < self.max_vehicles:
+                # Cria um novo veículo
                 new_route = [DEPOT_INDEX]
                 current_stops = 0
-                while current_stops < self.vehicle_max_points and temp_points:
-                    new_route.append(temp_points.pop(0))
+                
+                while current_stops < self.vehicle_max_points and points_to_assign:
+                    new_route.append(points_to_assign.pop(0))
                     current_stops += 1
-                new_route.append(DEPOT_INDEX)
-                child.append(new_route)
+                
+                if len(new_route) > 1:
+                    new_route.append(DEPOT_INDEX)
+                    child.append(new_route)
+            
+            else:
+                # MAX_VEHICLES atingido: insere os pontos restantes no último veículo
+                last_vehicle_route = child[self.max_vehicles - 1]
+                
+                new_trip_points = []
+                current_stops = 0
+                while current_stops < self.vehicle_max_points and points_to_assign:
+                     new_trip_points.append(points_to_assign.pop(0))
+                     current_stops += 1
 
+                if new_trip_points:
+                    new_trip = [DEPOT_INDEX] + new_trip_points + [DEPOT_INDEX]
+                    
+                    if not last_vehicle_route:
+                         child[self.max_vehicles - 1] = new_trip
+                    else:
+                         child[self.max_vehicles - 1].extend(new_trip)
+                         # Limpa depósitos duplicados
+                         child[self.max_vehicles - 1] = self._clean_route(child[self.max_vehicles - 1])
+
+
+        # 5. Finalização e garantia de tamanho do cromossomo
         child = child[:self.max_vehicles]
         while len(child) < self.max_vehicles:
             child.append([])
-            
+
         return child
+
+    def inter_route_swap_search(self, solution):
+        """
+        Busca local Inter-Route (One-Point Move) otimizada para desempenho máximo.
+        Utiliza early stopping, minimiza cópias e evita recomputações desnecessárias.
+        """
+        current_solution = [r[:] for r in solution]
+        current_cost = self.calculate_fitness(current_solution)
+        improved = True
+
+        # Pré-calcula índices de pontos não-depósito para cada rota
+        def get_point_indices(route):
+            return [i for i, p in enumerate(route) if p != DEPOT_INDEX]
+
+        while improved:
+            improved = False
+            best_move = None
+            min_new_cost = current_cost
+
+            # Para cada rota de origem
+            for source_route_idx, source_route in enumerate(current_solution):
+                if not source_route or len(source_route) < 3:
+                    continue
+                source_point_indices = get_point_indices(source_route)
+
+                # Para cada ponto na rota de origem
+                for point_idx_in_route in source_point_indices:
+                    point_to_move = source_route[point_idx_in_route]
+
+                    # Para cada rota alvo
+                    for target_route_idx, target_route in enumerate(current_solution):
+                        # Define posições de inserção
+                        if source_route_idx == target_route_idx:
+                            insert_positions = [i for i in range(1, len(target_route))
+                                                if i != point_idx_in_route and i != point_idx_in_route + 1]
+                        elif not target_route:
+                            insert_positions = [1]
+                        else:
+                            insert_positions = range(1, len(target_route))
+
+                        for insert_index in insert_positions:
+                            # Evita cópias desnecessárias: só copia se for testar
+                            temp_solution = current_solution
+                            # Remove ponto da origem
+                            temp_source = temp_solution[source_route_idx][:]
+                            temp_source.pop(point_idx_in_route)
+                            temp_source = self._clean_route(temp_source)
+                            # Insere ponto na rota alvo
+                            temp_target = temp_solution[target_route_idx][:]
+                            if not temp_target:
+                                if len([r for r in temp_solution if r]) < self.max_vehicles or target_route_idx == source_route_idx:
+                                    temp_target = [DEPOT_INDEX, point_to_move, DEPOT_INDEX]
+                                else:
+                                    continue
+                            else:
+                                temp_target.insert(insert_index, point_to_move)
+                                temp_target = self._clean_route(temp_target)
+                            # Monta nova solução
+                            temp_new_solution = temp_solution[:]
+                            temp_new_solution[source_route_idx] = temp_source
+                            temp_new_solution[target_route_idx] = temp_target
+
+                            # Calcula custo
+                            new_cost = self.calculate_fitness(temp_new_solution)
+                            if new_cost < min_new_cost:
+                                min_new_cost = new_cost
+                                best_move = (source_route_idx, temp_source, target_route_idx, temp_target)
+                                improved = True
+                                # Early stopping: aplica primeira melhoria encontrada
+                                break
+                        if improved:
+                            break
+                    if improved:
+                        break
+                if improved:
+                    break
+
+            # Aplica melhor movimento encontrado
+            if improved and best_move:
+                s_idx, s_route, t_idx, t_route = best_move
+                current_solution = current_solution[:]
+                current_solution[s_idx] = s_route
+                current_solution[t_idx] = t_route
+                current_cost = min_new_cost
+
+        return current_solution
 
     def mutate(self, solution, mutation_rate):
         """
         Operador de mutação híbrido: 50% Inversão (2-Opt) / 50% Realocação Inteligente (Best Insertion).
+        A Realocação Inteligente é feita pela busca local inter-rotas.
         """
         is_mutated = random.random() < mutation_rate
         if not is_mutated:
             return solution
 
-        # 50% de chance de 2-Opt
+        # 50% de chance de 2-Opt (Intra-Route)
         if random.random() < 0.5:
-            # Mutação de Inversão (2-Opt) - Lógica inalterada
+            # Lógica de 2-Opt Global (restringida a pontos)
             points_only = [gene for route in solution for gene in route if gene != DEPOT_INDEX]
-            if len(points_only) >= 2:
-                idx1, idx2 = sorted(random.sample(range(len(points_only)), 2))
-                points_only[idx1:idx2] = points_only[idx1:idx2][::-1]
+            if len(points_only) < 2: return solution
+            
+            idx1, idx2 = sorted(random.sample(range(len(points_only)), 2))
+            points_only[idx1:idx2] = points_only[idx1:idx2][::-1]
 
             new_solution = []
             points_iter = iter(points_only)
@@ -341,107 +553,39 @@ class VRPGeneticAlgorithm:
                 if not route:
                     new_solution.append([])
                     continue
-                reconstructed_route = [DEPOT_INDEX]
                 
-                try:
-                    num_delivery_points = len([gene for gene in route if gene != DEPOT_INDEX])
-                    for _ in range(num_delivery_points):
-                        reconstructed_route.append(next(points_iter))
-                    reconstructed_route.append(DEPOT_INDEX)
-                    new_solution.append(reconstructed_route)
-                except StopIteration:
-                    break 
+                reconstructed_route = []
+                depot_indices = [i for i, x in enumerate(route) if x == DEPOT_INDEX]
+                
+                for i in range(len(depot_indices) - 1):
+                    start_idx = depot_indices[i]
+                    end_idx = depot_indices[i+1]
+                    trip_points = route[start_idx:end_idx+1]
+                    num_delivery_points = len([gene for gene in trip_points if gene != DEPOT_INDEX])
+                    
+                    current_trip = [DEPOT_INDEX]
+                    try:
+                        for _ in range(num_delivery_points):
+                            current_trip.append(next(points_iter))
+                        current_trip.append(DEPOT_INDEX)
+                        reconstructed_route.extend(current_trip)
+                    except StopIteration:
+                        break
+
+                new_solution.append(self._clean_route(reconstructed_route))
 
             while len(new_solution) < self.max_vehicles:
                 new_solution.append([])
-            return new_solution
+            
+            if self.calculate_fitness(new_solution) < self.calculate_fitness(solution):
+                return new_solution
+            return solution
 
         # 50% de chance de Realocação Inteligente (Best Insertion)
         else:
-            points_only = [gene for route in solution for gene in route if gene != DEPOT_INDEX]
+            new_solution = self.inter_route_swap_search(solution)
+            return new_solution
             
-            if len([r for r in solution if r]) < 2 or not points_only:
-                return solution 
-            
-            random_point_to_move = random.choice(points_only)
-            
-            source_route_index = -1
-            point_in_route_index = -1
-            for idx, route in enumerate(solution):
-                if random_point_to_move in route:
-                    source_route_index = idx
-                    point_in_route_index = route.index(random_point_to_move)
-                    break
-            
-            best_target_route_index = -1
-            best_insert_index = -1
-            min_new_cost = float('inf')
-            
-            original_cost = self.calculate_fitness(solution)
-            
-            # Busca a Melhor Inserção (Best Insertion)
-            for target_route_index in range(len(solution)):
-                if target_route_index == source_route_index:
-                    continue
-                
-                target_route = solution[target_route_index]
-                
-                if not target_route:
-                    insert_positions = [1]
-                else:
-                    insert_positions = range(1, len(target_route))
-                
-                for insert_index in insert_positions:
-                    
-                    temp_solution = [r[:] for r in solution]
-                    
-                    # A. Remove o ponto da rota de origem
-                    temp_solution[source_route_index].pop(point_in_route_index)
-                    
-                    if len(temp_solution[source_route_index]) <= 2 and all(p == DEPOT_INDEX for p in temp_solution[source_route_index]):
-                        temp_solution[source_route_index] = []
-                    
-                    # B. Insere o ponto na nova rota (respeita o limite de veículos)
-                    if not temp_solution[target_route_index]:
-                        if len([r for r in temp_solution if r]) < self.max_vehicles:
-                            temp_solution[target_route_index] = [DEPOT_INDEX, random_point_to_move, DEPOT_INDEX]
-                        else:
-                            continue 
-                    else:
-                        temp_solution[target_route_index].insert(insert_index, random_point_to_move)
-
-                    # C. Calcula o custo da nova solução (checa a viabilidade)
-                    new_cost = self.calculate_fitness(temp_solution)
-
-                    # D. Se a nova solução for a melhor VIÁVEL, armazena
-                    if new_cost < min_new_cost:
-                        min_new_cost = new_cost
-                        best_target_route_index = target_route_index
-                        best_insert_index = insert_index
-            
-            # 3. Aplica a MELHOR realocação
-            if min_new_cost < original_cost and best_target_route_index != -1:
-                new_solution = [r[:] for r in solution]
-                
-                # A. Remove
-                new_solution[source_route_index].pop(point_in_route_index)
-                if len(new_solution[source_route_index]) <= 2 and all(p == DEPOT_INDEX for p in new_solution[source_route_index]):
-                    new_solution[source_route_index] = []
-                
-                # B. Insere na melhor posição
-                if not new_solution[best_target_route_index]:
-                    new_solution[best_target_route_index] = [DEPOT_INDEX, random_point_to_move, DEPOT_INDEX]
-                else:
-                    new_solution[best_target_route_index].insert(best_insert_index, random_point_to_move)
-                    
-                # Garante o tamanho do cromossomo
-                while len(new_solution) < self.max_vehicles:
-                    new_solution.append([])
-                    
-                return new_solution
-                
-        return solution 
-
     def two_opt_local_search(self, solution):
         """Busca local 2-Opt (Intra-Route) para refinar a rota de cada veículo."""
         improved_solution = [r[:] for r in solution]
@@ -452,20 +596,40 @@ class VRPGeneticAlgorithm:
             improved = False
             for route_idx in range(len(improved_solution)):
                 vehicle_route = improved_solution[route_idx]
+                
+                depot_indices = [i for i, x in enumerate(vehicle_route) if x == DEPOT_INDEX]
+                
                 points_only = [gene for gene in vehicle_route if gene != DEPOT_INDEX]
                 
                 if len(points_only) < 3:
                     continue
+                
+                route_changed = False
                 
                 for i in range(len(points_only) - 1):
                     for j in range(i + 1, len(points_only)):
                         temp_points = points_only[:]
                         temp_points[i:j+1] = temp_points[i:j+1][::-1]
 
+                        temp_route = [DEPOT_INDEX]
+                        point_iter = iter(temp_points)
+                        
+                        for k in range(len(depot_indices) - 1):
+                            start_idx = depot_indices[k]
+                            end_idx = depot_indices[k+1]
+                            num_delivery_points = len(vehicle_route[start_idx:end_idx+1]) - 2
+                            
+                            for _ in range(num_delivery_points):
+                                try:
+                                    temp_route.append(next(point_iter))
+                                except StopIteration:
+                                    break
+                            temp_route.append(DEPOT_INDEX)
+
+                        final_route = self._clean_route(temp_route)
+                            
                         temp_solution = [r[:] for r in improved_solution]
-                        # Simplifica para uma única viagem para aplicar o 2-Opt
-                        temp_route = [DEPOT_INDEX] + temp_points + [DEPOT_INDEX]
-                        temp_solution[route_idx] = temp_route
+                        temp_solution[route_idx] = final_route
 
                         new_cost = self.calculate_fitness(temp_solution)
 
@@ -473,11 +637,11 @@ class VRPGeneticAlgorithm:
                             improved_solution = temp_solution
                             total_cost = new_cost
                             improved = True
-                            break 
-                    if improved:
-                        break
-                if improved:
-                    break
+                            route_changed = True
+                            break
+                    if route_changed: break
+                if route_changed: break
+        
         return improved_solution
 
     def run(self, epoch_callback: callable = None):
@@ -497,6 +661,7 @@ class VRPGeneticAlgorithm:
         for generation in range(self.generations):
             new_population = []
             
+            # --- REINICIALIZAÇÃO ---
             if count_generations_without_improvement >= self.max_no_improvement:
                 logging.info("Geração %d: Sem melhoria por %d gerações. Reiniciando população.", generation + 1, self.max_no_improvement)
                 self.population = self.create_initial_population_hybrid()
@@ -504,14 +669,28 @@ class VRPGeneticAlgorithm:
                 count_generations_without_improvement = 0
                 mutation_rate = self.mutation_rate
 
+            # --- AUMENTO DE MUTAÇÃO ---
             if count_generations_without_improvement_for_mutation >= COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION:
                 logging.info("Geração %d: Sem melhoria por %d gerações. Aumentando taxa de mutação.", generation + 1, COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION)
                 mutation_rate = min(0.5, mutation_rate * 1.1)
                 count_generations_without_improvement_for_mutation = 0
 
-            # Aplica a busca local na melhor solução a cada 100 gerações
+            # --- BUSCA LOCAL INTER-ROTAS (Adição Requisitada) ---
+            if generation % COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION == 0 and best_cost != float('inf'):
+                logging.info("Geração %d: Aplicando Busca Local Inter-Rotas (Swap).", generation + 1)
+                inter_optimized_solution = self.inter_route_swap_search(best_solution)
+                inter_optimized_cost = self.calculate_fitness(inter_optimized_solution)
+                
+                if inter_optimized_cost < best_cost:
+                    best_cost = inter_optimized_cost
+                    best_solution = inter_optimized_solution
+                    count_generations_without_improvement = 0
+                    logging.info("Geração %d: Inter-Swap encontrou uma melhoria. Novo custo: %.2f", generation + 1, best_cost)
+
+
+            # --- BUSCA LOCAL INTRA-ROTAS (2-Opt) ---
             if generation % TWO_OPT_FREQUENCY == 0 and best_cost != float('inf'):
-                logging.info("Geração %d: Aplicando busca local na melhor solução.", generation + 1)
+                logging.info("Geração %d: Aplicando busca local Intra-Rotas (2-Opt).", generation + 1)
                 local_optimized_solution = self.two_opt_local_search(best_solution)
                 local_optimized_cost = self.calculate_fitness(local_optimized_solution)
                 
@@ -519,8 +698,10 @@ class VRPGeneticAlgorithm:
                     best_cost = local_optimized_cost
                     best_solution = local_optimized_solution
                     count_generations_without_improvement = 0
-                    logging.info("Geração %d: Busca local encontrou uma melhoria. Novo custo: %.2f", generation + 1, best_cost)
+                    logging.info("Geração %d: 2-Opt encontrou uma melhoria. Novo custo: %.2f", generation + 1, best_cost)
 
+
+            # --- SELEÇÃO E GERAÇÃO ---
             best_gen_idx = min(range(len(fitness_cache)), key=lambda i: fitness_cache[i])
             best_of_gen = self.population[best_gen_idx]
             new_population.append(best_of_gen)
@@ -542,6 +723,7 @@ class VRPGeneticAlgorithm:
 
             logging.info('Geração %d - Custo da melhor solução na população: %.2f', generation + 1, current_best_cost)
 
+            # --- ATUALIZAÇÃO DO MELHOR GLOBAL ---
             if current_best_cost < best_cost:
                 best_solution = current_best
                 best_cost = current_best_cost
@@ -553,20 +735,19 @@ class VRPGeneticAlgorithm:
 
             logging.info('Geração %d - Melhor Custo Global: %.2f', generation + 1, best_cost)
 
-            # Call epoch callback with vehicle points information
+            # --- CALLBACK ---
             if epoch_callback:
                 vehicle_points = []
                 for i, route in enumerate(best_solution):
-                    if route:  # Only include vehicles that have routes
-                        # Calculate distance and duration for this vehicle's route
+                    if route: 
                         trip_cost, trip_duration, trip_distance = self._get_trip_cost(route)
                         
                         vehicle_points.append({
                             'vehicle_id': i + 1,
-                            'points': len([p for p in route if p != 0]),  # Exclude depot from count
+                            'points': len([p for p in route if p != 0]), 
                             'route': route,
-                            'distance': round(trip_distance / 1000, 2),  # Convert to km
-                            'duration': round(trip_duration / 60, 1),    # Convert to minutes
+                            'distance': round(trip_distance / 1000, 2), 
+                            'duration': round(trip_duration / 60, 1),   
                             'cost': round(trip_cost, 4) if trip_cost != float('inf') else None
                         })
                 
