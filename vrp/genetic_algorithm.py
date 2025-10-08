@@ -165,32 +165,39 @@ class VRPGeneticAlgorithm:
 
         current_trip_duration = 0
         current_trip_distance = 0
-        current_trip_stops = len(trip_points) - 2
 
         last_point_idx = trip_points[0]
         current_trip_duration += TIME_DEPOT_STOP
-        
-        for point_idx in trip_points[1:]:
-            current_trip_duration += self.duration_matrix[last_point_idx][point_idx]
-            current_trip_distance += self.distance_matrix[last_point_idx][point_idx]
-            
-            if point_idx != DEPOT_INDEX:
-                current_trip_duration += self.time_to_stop
-            elif point_idx == DEPOT_INDEX and last_point_idx != DEPOT_INDEX:
-                current_trip_duration += TIME_DEPOT_STOP
-                
-            last_point_idx = point_idx
+       
+        routes = []
+        current_route = []
+        for idx, point in enumerate(trip_points):
+            current_route.append(point)
+            if point == DEPOT_INDEX and len(current_route) > 1:
+                delivery_points = [p for p in current_route if p != DEPOT_INDEX]
+                if len(delivery_points) > self.vehicle_max_points:
+                    return float('inf'), 0, 0
+                routes.append(current_route)
+                current_route = [DEPOT_INDEX] if idx != len(trip_points) - 1 else []
 
-        # Penalidade infinita para inviabilidade (Hard Constraint)
-        if current_trip_duration > self.max_trip_duration or current_trip_distance > self.max_trip_distance or current_trip_stops > self.vehicle_max_points:
-            return float('inf'), 0, 0, 0
-        
-        # Cálculo do custo normalizado (Fitness)
+        for route in routes:
+            last_point_idx = route[0]
+            for point_idx in route[1:]:
+                current_trip_duration += self.duration_matrix[last_point_idx][point_idx]
+                current_trip_distance += self.distance_matrix[last_point_idx][point_idx]
+                if point_idx != DEPOT_INDEX:
+                    current_trip_duration += self.time_to_stop
+                elif point_idx == DEPOT_INDEX and last_point_idx != DEPOT_INDEX:
+                    current_trip_duration += TIME_DEPOT_STOP
+                last_point_idx = point_idx
+
+        if current_trip_duration > self.max_trip_duration or current_trip_distance > self.max_trip_distance:
+            return float('inf'), 0, 0
+
         normalized_duration = current_trip_duration / self.max_trip_duration
         normalized_distance = current_trip_distance / self.max_trip_distance
         trip_cost = (self.time_weight * normalized_duration) + (self.distance_weight * normalized_distance)
-        
-        return trip_cost, current_trip_duration, current_trip_distance, current_trip_stops
+        return trip_cost, current_trip_duration, current_trip_distance
 
     def calculate_fitness(self, solution):
         """
@@ -198,13 +205,10 @@ class VRPGeneticAlgorithm:
         """
         total_solution_cost = 0.0
         
-        # --- RESTRIÇÃO RÍGIDA 1: LIMITE MÁXIMO DE VEÍCULOS ---
         vehicles_used = len([r for r in solution if r])
         
         if vehicles_used > self.max_vehicles:
              return float('inf')
-        
-        # --- RESTRIÇÃO RÍGIDA 2 & 3: VIABILIDADE E COBERTURA ---
         
         visited_points = set()
         
@@ -224,7 +228,7 @@ class VRPGeneticAlgorithm:
                 end_idx = depot_indices[i+1]
                 trip_points = vehicle_route[start_idx:end_idx+1]
                 
-                trip_cost, _, _, _ = self._get_trip_cost(trip_points)
+                trip_cost, _, _ = self._get_trip_cost(trip_points)
                 
                 if trip_cost == float('inf'):
                     return float('inf')
@@ -555,7 +559,7 @@ class VRPGeneticAlgorithm:
                 for i, route in enumerate(best_solution):
                     if route:  # Only include vehicles that have routes
                         # Calculate distance and duration for this vehicle's route
-                        trip_cost, trip_duration, trip_distance, _ = self._get_trip_cost(route)
+                        trip_cost, trip_duration, trip_distance = self._get_trip_cost(route)
                         
                         vehicle_points.append({
                             'vehicle_id': i + 1,
