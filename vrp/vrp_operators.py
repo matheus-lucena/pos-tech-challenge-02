@@ -132,12 +132,36 @@ class VRPOperators:
         if not parent1 or not parent2:
             return deepcopy(random.choice([parent1, parent2]))
 
-        # Extract all customer points from both parents
+        # Extract all customer points from both parents while preserving order
         p1_points = [p for route in parent1 for p in route if p != DEPOT_INDEX]
         p2_points = [p for route in parent2 for p in route if p != DEPOT_INDEX]
-        all_unique = list(set(p1_points + p2_points))
-        random.shuffle(all_unique)
-        points_to_assign = all_unique[:]
+        
+        # Intelligently combine points: use order crossover approach
+        # Preserve the relative order from both parents to maintain good genetic material
+        points_to_assign = []
+        p1_set = set(p1_points)
+        p2_set = set(p2_points)
+        all_points = sorted(list(p1_set.union(p2_set)))
+        
+        # First, add points that appear in both parents in the order they appear in parent1
+        for point in p1_points:
+            if point in p2_set and point not in points_to_assign:
+                points_to_assign.append(point)
+        
+        # Then add points unique to parent1 in their original order
+        for point in p1_points:
+            if point not in p2_set and point not in points_to_assign:
+                points_to_assign.append(point)
+        
+        # Finally add points unique to parent2 in their original order
+        for point in p2_points:
+            if point not in p1_set and point not in points_to_assign:
+                points_to_assign.append(point)
+        
+        # Ensure all points are included
+        for point in all_points:
+            if point not in points_to_assign:
+                points_to_assign.append(point)
 
         child = []
         
@@ -362,8 +386,8 @@ class VRPOperators:
     def inter_route_swap_search(self, solution: List[List[int]], 
                               max_iter_without_improve: int = MAX_ITER_WITHOUT_IMPROVE_INTER_ROUTE) -> List[List[int]]:
         """
-        Inter-route local search with delta-cost.
-        Returns improved solution (or same if no improvement found).
+        Aggressive inter-route local search with multiple move types and intensified exploration.
+        Implements multiple neighborhood operators for more thorough optimization.
         
         Args:
             solution: Solution to improve
@@ -379,17 +403,27 @@ class VRPOperators:
             return current_solution
 
         iter_no_improve = 0
+        total_improvements = 0
+        max_total_improvements = max_iter_without_improve * 3  # Allow more total improvements
 
         def point_positions(route):
             return [i for i, p in enumerate(route) if p != DEPOT_INDEX]
 
-        while iter_no_improve < max_iter_without_improve:
+        def get_non_empty_routes():
+            return [(idx, route) for idx, route in enumerate(current_solution) 
+                   if route and len(route) >= 3]
+
+        while iter_no_improve < max_iter_without_improve and total_improvements < max_total_improvements:
             best_delta = 0.0
             best_move = None
+            move_type = None
+            
+            non_empty_routes = get_non_empty_routes()
+            if len(non_empty_routes) < 2:
+                break
 
-            for s_idx, s_route in enumerate(current_solution):
-                if not s_route or len(s_route) < 3:
-                    continue
+            # 1. AGGRESSIVE SINGLE POINT RELOCATION with expanded search
+            for s_idx, s_route in non_empty_routes:
                 s_positions = point_positions(s_route)
                 
                 for pos in s_positions:
@@ -397,45 +431,146 @@ class VRPOperators:
                         if s_idx == t_idx:
                             continue
                         
-                        # Define possible insertion positions
+                        # More aggressive insertion positions - try all positions
                         if not t_route:
-                            insert_positions = [1]  # Creates [0, x, 0]
+                            insert_positions = [1]
                         else:
-                            insert_positions = range(1, len(t_route))
+                            # Try all positions including after depot markers
+                            insert_positions = list(range(1, len(t_route) + 1))
                         
                         for ins in insert_positions:
-                            delta, feasible = self.delta_move_one_point(current_solution, s_idx, pos, t_idx, ins)
-                            if not feasible:
-                                continue
-                            if delta < best_delta:
-                                best_delta = delta
-                                best_move = (s_idx, pos, t_idx, ins, delta)
+                            # Calculate actual fitness delta by testing the move
+                            test_solution = [r[:] for r in current_solution]
+                            
+                            # Apply test move
+                            point_to_move = test_solution[s_idx][pos]
+                            test_solution[s_idx].pop(pos)
+                            test_solution[s_idx] = self.clean_route(test_solution[s_idx])
+                            
+                            if not test_solution[t_idx]:
+                                test_solution[t_idx] = [DEPOT_INDEX, point_to_move, DEPOT_INDEX]
+                            else:
+                                actual_ins = min(ins, len(test_solution[t_idx]))
+                                test_solution[t_idx].insert(actual_ins, point_to_move)
+                                test_solution[t_idx] = self.clean_route(test_solution[t_idx])
+                            
+                            # Calculate real delta
+                            test_cost = self.fitness_function(test_solution)
+                            if test_cost != float('inf'):
+                                delta = test_cost - current_cost
+                                if delta < best_delta:
+                                    best_delta = delta
+                                    best_move = (s_idx, pos, t_idx, ins, delta)
+                                    move_type = "relocate"
 
-            if best_move and best_move[4] < -1e-9:
-                s_idx, pos, t_idx, ins, d = best_move
+            # 2. AGGRESSIVE ROUTE SWAPPING - swap entire segments between routes
+            if best_delta >= -1e-6:  # If no good relocation found, try swaps
+                for i, (s_idx, s_route) in enumerate(non_empty_routes):
+                    for j, (t_idx, t_route) in enumerate(non_empty_routes[i+1:], i+1):
+                        s_positions = point_positions(s_route)
+                        t_positions = point_positions(t_route)
+                        
+                        # Try swapping single points between routes
+                        if s_positions and t_positions:
+                            for s_pos in s_positions[:min(3, len(s_positions))]:  # Limit to avoid explosion
+                                for t_pos in t_positions[:min(3, len(t_positions))]:
+                                    test_solution = [r[:] for r in current_solution]
+                                    
+                                    # Swap points
+                                    s_point = test_solution[s_idx][s_pos]
+                                    t_point = test_solution[t_idx][t_pos]
+                                    
+                                    test_solution[s_idx][s_pos] = t_point
+                                    test_solution[t_idx][t_pos] = s_point
+                                    
+                                    test_solution[s_idx] = self.clean_route(test_solution[s_idx])
+                                    test_solution[t_idx] = self.clean_route(test_solution[t_idx])
+                                    
+                                    test_cost = self.fitness_function(test_solution)
+                                    if test_cost != float('inf'):
+                                        delta = test_cost - current_cost
+                                        if delta < best_delta:
+                                            best_delta = delta
+                                            best_move = (s_idx, s_pos, t_idx, t_pos, delta)
+                                            move_type = "swap"
+
+            # 3. ROUTE BALANCING - move multiple points to balance loads
+            if best_delta >= -1e-6 and len(non_empty_routes) >= 2:
+                # Find most loaded and least loaded routes
+                route_loads = [(idx, len(point_positions(route))) for idx, route in non_empty_routes]
+                route_loads.sort(key=lambda x: x[1], reverse=True)
                 
-                # Apply movement
-                s_route = current_solution[s_idx][:]
-                point_to_move = s_route[pos]
-                s_route.pop(pos)
-                s_route = self.clean_route(s_route)
+                if len(route_loads) >= 2 and route_loads[0][1] > route_loads[-1][1] + 1:
+                    heavy_idx, heavy_load = route_loads[0]
+                    light_idx, light_load = route_loads[-1]
+                    
+                    # Try moving 2 points from heavy to light route
+                    heavy_positions = point_positions(current_solution[heavy_idx])
+                    if len(heavy_positions) >= 2:
+                        for i in range(min(2, len(heavy_positions))):
+                            test_solution = [r[:] for r in current_solution]
+                            
+                            # Move point from heavy to light route
+                            point_to_move = test_solution[heavy_idx][heavy_positions[i]]
+                            test_solution[heavy_idx].pop(heavy_positions[i])
+                            test_solution[heavy_idx] = self.clean_route(test_solution[heavy_idx])
+                            
+                            # Add to light route at best position
+                            if not test_solution[light_idx]:
+                                test_solution[light_idx] = [DEPOT_INDEX, point_to_move, DEPOT_INDEX]
+                            else:
+                                test_solution[light_idx].insert(-1, point_to_move)  # Insert before last depot
+                                test_solution[light_idx] = self.clean_route(test_solution[light_idx])
+                            
+                            test_cost = self.fitness_function(test_solution)
+                            if test_cost != float('inf'):
+                                delta = test_cost - current_cost
+                                if delta < best_delta:
+                                    best_delta = delta
+                                    best_move = (heavy_idx, heavy_positions[i], light_idx, -1, delta)
+                                    move_type = "balance"
 
-                t_route = current_solution[t_idx][:]
-                if not t_route:
-                    t_route = [DEPOT_INDEX, point_to_move, DEPOT_INDEX]
-                else:
-                    if ins > len(t_route):
-                        ins = len(t_route)
-                    t_route.insert(ins, point_to_move)
-                    t_route = self.clean_route(t_route)
-
-                current_solution[s_idx] = s_route
-                current_solution[t_idx] = t_route
+            # Apply the best move found
+            if best_move and best_move[4] < -1e-9:
+                if move_type == "relocate":
+                    s_idx, pos, t_idx, ins, d = best_move
+                    point_to_move = current_solution[s_idx][pos]
+                    current_solution[s_idx].pop(pos)
+                    current_solution[s_idx] = self.clean_route(current_solution[s_idx])
+                    
+                    if not current_solution[t_idx]:
+                        current_solution[t_idx] = [DEPOT_INDEX, point_to_move, DEPOT_INDEX]
+                    else:
+                        actual_ins = min(ins, len(current_solution[t_idx]))
+                        current_solution[t_idx].insert(actual_ins, point_to_move)
+                        current_solution[t_idx] = self.clean_route(current_solution[t_idx])
+                
+                elif move_type == "swap":
+                    s_idx, s_pos, t_idx, t_pos, d = best_move
+                    s_point = current_solution[s_idx][s_pos]
+                    t_point = current_solution[t_idx][t_pos]
+                    current_solution[s_idx][s_pos] = t_point
+                    current_solution[t_idx][t_pos] = s_point
+                    current_solution[s_idx] = self.clean_route(current_solution[s_idx])
+                    current_solution[t_idx] = self.clean_route(current_solution[t_idx])
+                
+                elif move_type == "balance":
+                    s_idx, pos, t_idx, ins, d = best_move
+                    point_to_move = current_solution[s_idx][pos]
+                    current_solution[s_idx].pop(pos)
+                    current_solution[s_idx] = self.clean_route(current_solution[s_idx])
+                    
+                    if not current_solution[t_idx]:
+                        current_solution[t_idx] = [DEPOT_INDEX, point_to_move, DEPOT_INDEX]
+                    else:
+                        current_solution[t_idx].insert(-1, point_to_move)
+                        current_solution[t_idx] = self.clean_route(current_solution[t_idx])
+                
                 current_cost += d
                 iter_no_improve = 0
+                total_improvements += 1
             else:
                 iter_no_improve += 1
-                break
 
         return current_solution
     
