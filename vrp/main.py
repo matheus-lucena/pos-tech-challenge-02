@@ -1,10 +1,8 @@
 import requests
 import logging
-import time
 import json
-from vrp.points import POINTS
 from vrp.llmintegration import gerar_pdf_relatorio
-from vrp.genetic_algorithm import VRPGeneticAlgorithm
+from vrp.vrp_ga import VRPGeneticAlgorithm
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s: %(message)s')
@@ -207,59 +205,3 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
 
             if len(current_travel) > 1:
                 travels.append(current_travel)
-
-            print(f"\nRota do Veículo {i+1}:")
-
-            for j, travel in enumerate(travels):
-
-                trip_cost, total_travel_duration, total_travel_distance = ga._get_trip_cost(
-                    travel)
-
-                if total_travel_duration == 0:
-                    continue
-
-                print(f"     Viagem {j+1}:")
-                print(f"       Paradas: {travel[1:-1]}")
-                print(
-                    f"       Tempo de viagem: {total_travel_duration / 60:.2f} minutos")
-                print(
-                    f"       Distância de viagem: {total_travel_distance:.2f} metros")
-                print(f"       Rota (índices): {travel}")
-
-                formatted_travel_points = "/".join(
-                    [f"{points[idx][0]},{points[idx][1]}" for idx in travel])
-                print(
-                    f"       String formatada das paradas da viagem: {formatted_travel_points}")
-
-            formatted_route_points = "/".join(
-                [f"{points[idx][0]},{points[idx][1]}" for idx in route])
-            print(
-                f"   String formatada das paradas da rota do veículo: {formatted_route_points}")
-
-
-# --- EXECUÇÃO PRINCIPAL ---
-if __name__ == "__main__":
-    start_time = time.time()
-    
-    def noop(*args, **kwargs):
-        pass
-
-    run_vrp(
-        points=POINTS,
-        max_epochs=GENERATIONS,
-        num_vehicles=MAX_VEHICLES,
-        vehicle_max_points=VEHICLE_MAX_POINTS,
-        max_trip_distance=MAX_TRIP_DISTANCE,
-        max_trip_duration=MAX_TRIP_DURATION,
-        max_no_improvement=COUNT_GENERATIONS_WITHOUT_IMPROVEMENT,
-        mutation_rate=MUTATION_RATE,
-        wait_time=TIME_TO_STOP,
-        epoch_callback=noop,
-        generate_json=True
-    )
-
-    end_time = time.time()
-    logging.info("Tempo total de execução: %.2f segundos",
-                 end_time - start_time)
-
-    print(POINTS[0])
