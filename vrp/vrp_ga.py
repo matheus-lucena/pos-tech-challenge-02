@@ -77,6 +77,11 @@ class VRPGeneticAlgorithm:
         # Initialize components
         self._initialize_components()
         
+        # Initialize fitness cache for performance
+        self.fitness_cache = {}
+        self.cache_hits = 0
+        self.cache_misses = 0
+        
         # Create initial population
         self.population = self.population_generator.create_initial_population_hybrid(
             self.population_size, self.heuristic_tax
@@ -111,7 +116,7 @@ class VRPGeneticAlgorithm:
 
     def calculate_fitness(self, solution: List[List[int]]) -> float:
         """
-        Calculate fitness of a solution using the local cost calculator.
+        Calculate fitness of a solution using the local cost calculator with caching.
         
         Args:
             solution: VRP solution to evaluate
@@ -119,7 +124,23 @@ class VRPGeneticAlgorithm:
         Returns:
             Fitness score (lower is better)
         """
-        return self.cost_calculator.calculate_fitness(solution, self.max_vehicles, self.num_points)
+        # Create hashable key for caching
+        solution_key = tuple(tuple(route) for route in solution)
+        
+        # Check cache first
+        if solution_key in self.fitness_cache:
+            self.cache_hits += 1
+            return self.fitness_cache[solution_key]
+        
+        # Calculate fitness if not in cache
+        self.cache_misses += 1
+        fitness = self.cost_calculator.calculate_fitness(solution, self.max_vehicles, self.num_points)
+        
+        # Store in cache (with size limit to prevent memory issues)
+        if len(self.fitness_cache) < 30000:  # Limit cache size
+            self.fitness_cache[solution_key] = fitness
+        
+        return fitness
 
     def run(self, epoch_callback: Optional[Callable] = None) -> Tuple[List[List[int]], float]:
         """
@@ -217,7 +238,14 @@ class VRPGeneticAlgorithm:
             if epoch_callback:
                 self._call_progress_callback(epoch_callback, generation + 1, best_solution)
 
+        # Log cache statistics
+        total_evaluations = self.cache_hits + self.cache_misses
+        cache_hit_rate = (self.cache_hits / total_evaluations * 100) if total_evaluations > 0 else 0
+        
         logging.info(f"Algorithm completed. Final best cost: {best_cost:.4f}")
+        logging.info(f"Fitness cache statistics: {self.cache_hits} hits, {self.cache_misses} misses ({cache_hit_rate:.1f}% hit rate)")
+        logging.info(f"Total fitness evaluations reduced from {total_evaluations} to {self.cache_misses} ({total_evaluations - self.cache_misses} saved)")
+        
         return best_solution, best_cost
 
     def _apply_local_optimizations(self, generation: int, best_solution: List[List[int]], 

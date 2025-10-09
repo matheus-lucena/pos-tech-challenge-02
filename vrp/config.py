@@ -4,9 +4,9 @@ This module centralizes all configuration parameters and constants used througho
 """
 
 # Algorithm parameters
-TWO_OPT_FREQUENCY = 10  # Apply local search every X generations
+TWO_OPT_FREQUENCY = 25  # Apply local search every X generations (reduced frequency)
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 50
-COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 5
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 10  # Increased for less frequent inter-route search
 DEFAULT_MUTATION_RATE = 0.05
 
 # Time constants (in seconds)
@@ -29,9 +29,9 @@ MAX_MUTATION_RATE = 0.5
 # Crossover probabilities
 TWO_OPT_MUTATION_PROBABILITY = 0.5
 
-# Local search parameters
+# Local search parameters (optimized for speed)
 MAX_IMPROVEMENTS_2OPT = 1
-MAX_ITER_WITHOUT_IMPROVE_INTER_ROUTE = 5
+MAX_ITER_WITHOUT_IMPROVE_INTER_ROUTE = 3  # Reduced iterations for faster execution
 
 # Penalty factors
 DURATION_PENALTY_THRESHOLD = 0.9

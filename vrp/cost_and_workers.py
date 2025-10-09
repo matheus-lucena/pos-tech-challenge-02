@@ -260,8 +260,7 @@ class CostCalculator:
     
     def calculate_fitness(self, solution: List[List[int]], max_vehicles: int, num_points: int) -> float:
         """
-        Complete fitness calculation (main process version).
-        Used when necessary (e.g., validation / final calculation).
+        Optimized fitness calculation with reduced complexity.
         
         Args:
             solution: VRP solution to evaluate
@@ -272,24 +271,37 @@ class CostCalculator:
             Fitness score (lower is better, inf if infeasible)
         """
         total_solution_cost = 0.0
-        vehicles_used = len([r for r in solution if r])
+        visited_points = set()
+        point_count = 0
         
-        if vehicles_used > max_vehicles:
+        # Count active vehicles in single pass
+        active_vehicles = 0
+        for vehicle_route in solution:
+            if vehicle_route:
+                active_vehicles += 1
+                
+        if active_vehicles > max_vehicles:
             return float('inf')
 
-        visited_points: Set[int] = set()
-        all_delivery_points: List[int] = []
-
+        # Process each vehicle route
         for vehicle_route in solution:
             if not vehicle_route:
                 continue
 
-            depot_indices = [i for i, x in enumerate(vehicle_route) if x == DEPOT_INDEX]
-            if (vehicle_route[0] != DEPOT_INDEX or 
-                vehicle_route[-1] != DEPOT_INDEX or 
-                len(depot_indices) < 2):
+            # Quick validation
+            if vehicle_route[0] != DEPOT_INDEX or vehicle_route[-1] != DEPOT_INDEX:
                 return float('inf')
 
+            # Find depot positions in single pass
+            depot_indices = []
+            for i, x in enumerate(vehicle_route):
+                if x == DEPOT_INDEX:
+                    depot_indices.append(i)
+            
+            if len(depot_indices) < 2:
+                return float('inf')
+
+            # Process trips with optimized loop
             for i in range(len(depot_indices) - 1):
                 start_idx = depot_indices[i]
                 end_idx = depot_indices[i + 1]
@@ -298,23 +310,71 @@ class CostCalculator:
                 if len(trip) <= 2:
                     continue
                     
-                trip_cost, _, _ = self.trip_cost_local(trip)
+                # Fast trip cost calculation
+                trip_cost = self._fast_trip_cost(trip)
                 if trip_cost == float('inf'):
                     return float('inf')
                     
                 total_solution_cost += trip_cost
-                deliveries = [p for p in trip if p != DEPOT_INDEX]
-                visited_points.update(deliveries)
-                all_delivery_points.extend(deliveries)
+                
+                # Count and track points efficiently
+                for p in trip[1:-1]:  # Skip depot at start and end
+                    if p in visited_points:
+                        return float('inf')  # Duplicate point
+                    visited_points.add(p)
+                    point_count += 1
 
-        if len(all_delivery_points) != len(visited_points):
-            return float('inf')
-
-        all_required_points = set(range(1, num_points))
-        if visited_points != all_required_points:
+        # Fast coverage check
+        if point_count != num_points - 1:  # -1 for depot
             return float('inf')
 
         return total_solution_cost
+
+    def _fast_trip_cost(self, trip_points: List[int]) -> float:
+        """
+        Optimized trip cost calculation with minimal operations.
+        
+        Args:
+            trip_points: Points in the trip
+            
+        Returns:
+            Trip cost or infinity if infeasible
+        """
+        if len(trip_points) < 2:
+            return float('inf')
+
+        cur_duration = TIME_DEPOT_STOP
+        cur_distance = 0
+        last = trip_points[0]
+        
+        # Single loop with optimized operations
+        for p in trip_points[1:]:
+            cur_duration += self.duration_matrix[last][p]
+            cur_distance += self.distance_matrix[last][p]
+
+            if p != DEPOT_INDEX:
+                cur_duration += self.time_to_stop
+            elif last != DEPOT_INDEX:  # Arriving at depot from customer
+                cur_duration += TIME_DEPOT_STOP
+
+            last = p
+
+        # Quick feasibility check
+        if cur_duration > self.max_trip_duration or cur_distance > self.max_trip_distance:
+            return float('inf')
+
+        # Simplified cost calculation
+        duration_ratio = cur_duration / self.max_trip_duration
+        distance_ratio = cur_distance / self.max_trip_distance
+        
+        # Fast penalty calculation
+        penalty = 1.0
+        max_ratio = max(duration_ratio, distance_ratio)
+        if max_ratio > DURATION_PENALTY_THRESHOLD:
+            excess = (max_ratio - DURATION_PENALTY_THRESHOLD) / (1.0 - DURATION_PENALTY_THRESHOLD)
+            penalty += PENALTY_MULTIPLIER * excess * excess
+
+        return penalty * (self.time_weight * duration_ratio + self.distance_weight * distance_ratio)
 
 
 class ParallelFitnessEvaluator:
