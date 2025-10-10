@@ -7,12 +7,12 @@ from vrp.vrp_ga import VRPGeneticAlgorithm
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s: %(message)s')
 
-# --- PARÂMETROS ---
+# --- PARÂMETROS OTIMIZADOS PARA PERFORMANCE ---
 OSRM_BASE_URL = "http://localhost:5001/table/v1/driving/"
-POPULATION_SIZE = 400
-POPULATION_HEURISTIC_TAX = 0.5
+POPULATION_SIZE = 100          # ⚡ Reduzido de 400 para 100 (4x mais rápido)
+POPULATION_HEURISTIC_TAX = 0.7 # ⚡ Aumentado para melhor população inicial
 GENERATIONS = 20
-MUTATION_RATE = 0.05
+MUTATION_RATE = 0.08           # ⚡ Aumentado para compensar menor população
 MAX_VEHICLES = 20
 VEHICLE_MAX_POINTS = 8  # Max number of stops per vehicle
 MAX_TRIP_DURATION = 8 * 3600  # X hours in seconds
@@ -21,7 +21,7 @@ TIME_TO_STOP = 180  # 3 minutes in seconds per stop
 TIME_DEPOT_STOP = 180  # 3 minutes in seconds per stop
 TWO_OPT_FREQUENCY = 100  # Apply local search every X generations
 
-COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 50
+COUNT_GENERATIONS_WITHOUT_IMPROVEMENT = 25  # ⚡ Reduzido para restart mais rápido
 COUNT_GENERATIONS_WITHOUT_IMPROVEMENT_FOR_MUTATION = 5
 
 DEPOT_INDEX = 0  # Assuming the first point is the depot

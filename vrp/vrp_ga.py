@@ -77,8 +77,10 @@ class VRPGeneticAlgorithm:
         # Initialize components
         self._initialize_components()
         
-        # Initialize fitness cache for performance
+        # Initialize thread-safe fitness cache for performance  
+        import threading
         self.fitness_cache = {}
+        self.cache_lock = threading.RLock()  # Reentrant lock for thread safety
         self.cache_hits = 0
         self.cache_misses = 0
         
@@ -116,7 +118,7 @@ class VRPGeneticAlgorithm:
 
     def calculate_fitness(self, solution: List[List[int]]) -> float:
         """
-        Calculate fitness of a solution using the local cost calculator with caching.
+        Calculate fitness of a solution using the local cost calculator with optimized caching.
         
         Args:
             solution: VRP solution to evaluate
@@ -124,21 +126,30 @@ class VRPGeneticAlgorithm:
         Returns:
             Fitness score (lower is better)
         """
-        # Create hashable key for caching
-        solution_key = tuple(tuple(route) for route in solution)
+        # Optimized hash key generation - much faster than nested tuples
+        import hashlib
+        solution_str = str(solution).encode('utf-8')
+        solution_key = hashlib.md5(solution_str).hexdigest()
         
-        # Check cache first
-        if solution_key in self.fitness_cache:
-            self.cache_hits += 1
-            return self.fitness_cache[solution_key]
+        # Thread-safe cache access
+        with self.cache_lock:
+            # Check cache first
+            if solution_key in self.fitness_cache:
+                self.cache_hits += 1
+                return self.fitness_cache[solution_key]
         
-        # Calculate fitness if not in cache
+        # Calculate fitness if not in cache (outside lock for better performance)
         self.cache_misses += 1
         fitness = self.cost_calculator.calculate_fitness(solution, self.max_vehicles, self.num_points)
         
-        # Store in cache (with size limit to prevent memory issues)
-        if len(self.fitness_cache) < 30000:  # Limit cache size
-            self.fitness_cache[solution_key] = fitness
+        # Store in cache with thread-safe size limit
+        with self.cache_lock:
+            if len(self.fitness_cache) < 50000:  # Increased cache size for better hit rate
+                self.fitness_cache[solution_key] = fitness
+            elif len(self.fitness_cache) >= 50000:
+                # Thread-safe cache cleanup: clear entire cache when full
+                self.fitness_cache.clear()
+                self.fitness_cache[solution_key] = fitness
         
         return fitness
 
@@ -154,12 +165,13 @@ class VRPGeneticAlgorithm:
         """
         logging.info("Starting VRP Genetic Algorithm execution")
         
-        # Calculate chunk size for parallel processing
-        chunksize = (self.population_size // self.parallel_evaluator.cpu_count 
-                    if self.population_size > self.parallel_evaluator.cpu_count else 1)
+        # Optimized chunk size for 20 cores - smaller chunks for better load balancing
+        chunksize = max(1, self.population_size // (self.parallel_evaluator.cpu_count * 4))
+        logging.info(f"Using optimized chunk size: {chunksize} for {self.parallel_evaluator.cpu_count} cores")
 
-        # Initialize fitness cache
-        fitness_cache = [self.calculate_fitness(sol) for sol in self.population]
+        # Initialize fitness cache - PARALLELIZED for 20 cores
+        logging.info("Evaluating initial population in parallel...")
+        fitness_cache = self.parallel_evaluator.evaluate_population(self.population, chunksize)
         best_idx = min(range(len(fitness_cache)), key=lambda i: fitness_cache[i])
         best_solution = self.population[best_idx]
         best_cost = fitness_cache[best_idx]
@@ -174,13 +186,13 @@ class VRPGeneticAlgorithm:
             start_gen = time.time()
             new_population = []
 
-            # Population restart on stagnation
+            # Population restart on stagnation - PARALLELIZED
             if count_generations_without_improvement >= self.max_no_improvement:
                 logging.info(f"Generation {generation + 1}: Restarting population after {self.max_no_improvement} generations without improvement")
                 self.population = self.population_generator.create_initial_population_hybrid(
                     self.population_size, self.heuristic_tax
                 )
-                fitness_cache = [self.calculate_fitness(sol) for sol in self.population]
+                fitness_cache = self.parallel_evaluator.evaluate_population(self.population, chunksize)
                 count_generations_without_improvement = 0
                 mutation_rate = self.mutation_rate
 
@@ -200,12 +212,11 @@ class VRPGeneticAlgorithm:
             best_of_gen = self.population[best_gen_idx]
             new_population.append(best_of_gen)  # Elitism
 
-            # Generate rest of population
-            while len(new_population) < self.population_size:
-                parents = self.operators.select_parents(self.population)
-                child = self.operators.crossover(parents[0], parents[1])
-                mutated = self.operators.mutate(child, mutation_rate)
-                new_population.append(mutated)
+            # Generate rest of population - PARALLELIZED
+            remaining_population = self.population_size - len(new_population)
+            if remaining_population > 0:
+                new_offspring = self._generate_offspring_parallel(remaining_population, mutation_rate)
+                new_population.extend(new_offspring)
 
             # Parallel fitness evaluation
             new_fitness_cache = self.parallel_evaluator.evaluate_population(new_population, chunksize)
@@ -247,6 +258,34 @@ class VRPGeneticAlgorithm:
         logging.info(f"Total fitness evaluations reduced from {total_evaluations} to {self.cache_misses} ({total_evaluations - self.cache_misses} saved)")
         
         return best_solution, best_cost
+
+    def _generate_offspring_parallel(self, num_offspring: int, mutation_rate: float) -> List[List[List[int]]]:
+        """
+        Generate offspring in parallel using ThreadPoolExecutor for maximum CPU utilization.
+        
+        Args:
+            num_offspring: Number of offspring to generate
+            mutation_rate: Current mutation rate
+            
+        Returns:
+            List of generated offspring
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        import concurrent.futures
+        
+        def generate_single_offspring(_):
+            parents = self.operators.select_parents(self.population)
+            child = self.operators.crossover(parents[0], parents[1])
+            return self.operators.mutate(child, mutation_rate)
+        
+        # Use ThreadPoolExecutor to leverage all 20 cores
+        max_workers = min(num_offspring, 20)  # Use all available cores
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(generate_single_offspring, i) for i in range(num_offspring)]
+            offspring = [future.result() for future in concurrent.futures.as_completed(futures)]
+        
+        return offspring
 
     def _apply_local_optimizations(self, generation: int, best_solution: List[List[int]], 
                                  best_cost: float, count_no_improve: int, 
