@@ -118,7 +118,7 @@ let routeLines = []; // Store current route lines for cleanup
  * Update route visualization on the map
  * @param {Object} data - Training data with vehicle routes
  */
-function updateRouteVisualization(data) {
+function updateRouteVisualization(vehicleData) {
   // Clear existing route lines
   clearRouteLines();
 
@@ -126,7 +126,7 @@ function updateRouteVisualization(data) {
 
   const route_points = [config.companyAddress, ...points]
 
-  data.vehicle_data.forEach((vehicle, index) => {
+  vehicleData.forEach((vehicle, index) => {
     if (vehicle.route && vehicle.route.length > 1) {
       const color = getVehicleColor(index);
       const dashArray = index < VEHICLE_COLORS.length ? null : '10, 5';

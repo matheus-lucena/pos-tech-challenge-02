@@ -7,12 +7,30 @@ let points = [];
 let markers = [];
 const MAX_POINTS = 400;
 
+function createMarker(lat, lng, pointNumber = 0, color = '#22c55e') {
+  const icon = L.divIcon({
+    className: "custom-div-icon",
+    html: `<div style="background-color: ${color}; color: #0a0a0a; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid #0a0a0a;">${pointNumber}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+
+  const marker = L.marker([lat, lng], { icon: icon })
+    .bindPopup(
+      `<strong>Point ${pointNumber}</strong><br>${lat.toFixed(6)}, ${lng.toFixed(6)}`
+    )
+    .addTo(map);
+
+  return marker
+}
+
 /**
  * Add a point to the map and points list
  * @param {number} lat - Latitude
  * @param {number} lng - Longitude
+ * @param {string} color - Marker color (optional, defaults to green)
  */
-function addPoint(lat, lng) {
+function addPoint(lat, lng, color = '#22c55e') {
   if (points.length >= MAX_POINTS) {
     alert(`Maximum ${MAX_POINTS} points allowed`);
     return;
@@ -25,20 +43,7 @@ function addPoint(lat, lng) {
   points.push(point);
 
   // Add marker
-  const icon = L.divIcon({
-    className: "custom-div-icon",
-    html: `<div style="background-color: #22c55e; color: #0a0a0a; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid #0a0a0a; box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);">${points.length}</div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  });
-
-  const marker = L.marker([lat, lng], { icon: icon })
-    .bindPopup(
-      `<strong>Point ${points.length}</strong><br>${lat.toFixed(
-        6
-      )}, ${lng.toFixed(6)}`
-    )
-    .addTo(map);
+  const marker = createMarker(lat, lng, points.length, color);
 
   markers.push(marker);
   updatePointsList();
@@ -50,7 +55,7 @@ function addPoint(lat, lng) {
 function addManualPoint() {
   const input = document.getElementById("manual-coords");
   const inputValue = input.value.trim();
-  
+
   if (!inputValue) {
     alert("Please enter coordinates");
     return;
@@ -58,10 +63,10 @@ function addManualPoint() {
 
   // Check if there are multiple coordinate pairs separated by semicolons
   const coordinatePairs = inputValue.split(";").map(pair => pair.trim()).filter(pair => pair);
-  
+
   let addedCount = 0;
   let errorCount = 0;
-  
+
   coordinatePairs.forEach((pair, index) => {
     const coords = pair.split(",");
 
@@ -128,22 +133,7 @@ function removePoint(index) {
   markers = [];
 
   points.forEach((point, i) => {
-    const icon = L.divIcon({
-      className: "custom-div-icon",
-      html: `<div style="background-color: #22c55e; color: #0a0a0a; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid #0a0a0a; box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);">${i + 1
-        }</div>`,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    });
-
-    const marker = L.marker([point.lat, point.lng], { icon: icon })
-      .bindPopup(
-        `<strong>Point ${i + 1}</strong><br>${point.lat.toFixed(
-          6
-        )}, ${point.lng.toFixed(6)}`
-      )
-      .addTo(map);
-
+    const marker = createMarker(point.lat, point.lng, i + 1);
     markers.push(marker);
   });
 
@@ -335,12 +325,34 @@ function showCopyFeedback(routeId) {
     const originalIcon = copyBtn.innerHTML;
     copyBtn.innerHTML = '<i class="fas fa-check"></i>';
     copyBtn.style.color = 'var(--color-success)';
-    
+
     setTimeout(() => {
       copyBtn.innerHTML = originalIcon;
       copyBtn.style.color = '';
     }, 1000);
   }
+}
+
+function updateMarkerVisualization(vehicleData) {
+  vehicleData.forEach((vehicle, index) => {
+    if (vehicle.route && vehicle.route.length > 1) {
+      const color = getVehicleColor(index);
+
+      vehicle.route.forEach(pointIndex => {
+        if (pointIndex === 0) return // Skip company address
+
+        const adjustedIndex = pointIndex - 1; // Adjust for company address at index 0
+        const point = points[adjustedIndex];
+        
+        if (point && markers[adjustedIndex]) {
+          markers[adjustedIndex].remove();
+
+          const marker = createMarker(point.lat, point.lng, adjustedIndex + 1, color);
+          markers[adjustedIndex] = marker;
+        }
+      })
+    }
+  });
 }
 
 // Export functions to global scope for compatibility
@@ -352,3 +364,4 @@ window.calculateRoute = calculateRoute;
 window.saveToRecents = saveToRecents;
 window.loadRecentRoute = loadRecentRoute;
 window.copyRoutePoints = copyRoutePoints;
+window.updateMarkerVisualization = updateMarkerVisualization;

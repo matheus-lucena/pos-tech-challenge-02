@@ -19,7 +19,8 @@ function initEventSource() {
 
     // Update UI with route visualization
     if (data.vehicle_data && Array.isArray(data.vehicle_data)) {
-      updateRouteVisualization(data);
+      updateRouteVisualization(data.vehicle_data);
+      updateMarkerVisualization(data.vehicle_data);
       showVehiclePanel(data.vehicle_data);
     }
   });
