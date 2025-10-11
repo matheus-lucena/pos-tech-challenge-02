@@ -3,3 +3,6 @@ flask-socketio
 google-generativeai
 python-dotenv
 reportlab
+numpy
+requests
+psutil
