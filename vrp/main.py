@@ -1,17 +1,13 @@
 import requests
 import logging
-import json
-from vrp.llmintegration import gerar_pdf_relatorio
+from vrp.llmintegration import generate_pdf_report
 from vrp.vrp_ga import VRPGeneticAlgorithm
 from vrp.config import DEPOT_INDEX, TIME_DEPOT_STOP, OSRM_BASE_URL, POPULATION_SIZE, POPULATION_HEURISTIC_TAX
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s: %(message)s')
 
-# --- PARÂMETROS OTIMIZADOS PARA PERFORMANCE ---
-
 def generate_json_output(best_solution, best_cost, duration_matrix, distance_matrix, points, wait_time, num_vehicles, vehicle_max_points, max_trip_duration):
-    """Monta a estrutura JSON da solução VRP final."""
     all_routes_data = []
 
     for i, route in enumerate(best_solution):
@@ -22,7 +18,6 @@ def generate_json_output(best_solution, best_cost, duration_matrix, distance_mat
         travels = []
         current_travel = []
 
-        # Divide a rota do veículo em viagens (Depot -> ... -> Depot)
         for point_idx in route:
             current_travel.append(point_idx)
             if point_idx == DEPOT_INDEX and len(current_travel) > 1:
@@ -35,23 +30,19 @@ def generate_json_output(best_solution, best_cost, duration_matrix, distance_mat
         total_route_duration = 0
         total_route_distance = 0
 
-        # Calcula os detalhes de cada viagem
         for j, travel in enumerate(travels):
 
-            # Recálculo das métricas (usa a lógica que estava na seção de impressão)
             current_trip_duration = 0
             current_trip_distance = 0
             last_point_idx = travel[0]
 
-            current_trip_duration += TIME_DEPOT_STOP  # Tempo inicial no depósito
+            current_trip_duration += TIME_DEPOT_STOP 
 
             for point_idx in travel[1:]:
-                # Se for um ponto intermediário de viagem/rota
                 if last_point_idx != -1 and point_idx != -1:
                     current_trip_duration += duration_matrix[last_point_idx][point_idx]
                     current_trip_distance += distance_matrix[last_point_idx][point_idx]
 
-                # Tempo de parada
                 if point_idx != DEPOT_INDEX:
                     current_trip_duration += wait_time
                 else:
@@ -95,22 +86,19 @@ def generate_json_output(best_solution, best_cost, duration_matrix, distance_mat
         "routes": all_routes_data
     }
 
-    gerar_pdf_relatorio(final_output)  # Chama a função para gerar o PDF com o dicionário JSON
+    generate_pdf_report(final_output) 
     return final_output
 
 
 def get_matrix(locations):
     coords_str = ";".join([f"{lon},{lat}" for lat, lon in locations])
     url = f"{OSRM_BASE_URL}{coords_str}?sources=all&destinations=all&annotations=duration,distance"
-
-    # logging.info('Requesting OSRM matrix: %s', url) # Comentado para não poluir o log
-
     try:
         response = requests.get(url)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        logging.error("Erro ao conectar ao OSRM: %s", e)
+        logging.error("Error to connect ao OSRM: %s", e)
         return None
 
 
@@ -120,7 +108,7 @@ def get_cost_matrix(locations):
         return data['durations'], data['distances']
     else:
         logging.error(
-            "Erro na resposta do OSRM: 'durations/distances' não encontrado.")
+            "Error: 'durations/distances' not found")
         return None, None
 
 
@@ -128,10 +116,6 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
     duration_matrix, distance_matrix = get_cost_matrix(points)
     
     if duration_matrix and distance_matrix:
-        print("Matriz de distâncias recebida com sucesso.")
-
-        print(
-            f"\n2. Executando Algoritmo Genético com {num_vehicles} veículos...")
         ga = VRPGeneticAlgorithm(
             duration_matrix,
             distance_matrix,
@@ -150,8 +134,7 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
         best_solution, best_cost = ga.run(epoch_callback)
 
         if generate_json:
-            print("\n--- INÍCIO DA SAÍDA JSON PARA LLM ---")
-            final_json_data = generate_json_output(
+            generate_json_output(
                 best_solution,
                 best_cost,
                 duration_matrix,
@@ -163,18 +146,7 @@ def run_vrp(points: list, max_epochs: int, num_vehicles: int, vehicle_max_points
                 max_trip_duration
             )
 
-            json_output = json.dumps(final_json_data, indent=4, ensure_ascii=False)
-
-            print(json_output)
-            print("--- FIM DA SAÍDA JSON PARA LLM ---")
-            print("\n--- Resultado Final ---")
-
-        print(
-            f"Melhor custo de solução encontrado: {best_cost:.2f} (em unidades normalizadas)")
-        vehicles_used = len([r for r in best_solution if r])
-        print(f"Número de veículos utilizados: {vehicles_used}")
-
-        for i, route in enumerate(best_solution):
+        for _, route in enumerate(best_solution):
             if not route:
                 continue
 

@@ -62,7 +62,8 @@ def calculate_route():
             max_trip_duration=max_trip_duration,
             mutation_rate=config['mutationRate'] / 100.0,
             max_no_improvement=config['maxNoImprovement'],
-            epoch_callback=send_training_event
+            generate_json=True,
+            epoch_callback=send_training_event,
         )
         # Send finished message when training completes
         socketio.emit('training_update', {"status": "finished"})
