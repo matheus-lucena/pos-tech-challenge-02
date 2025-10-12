@@ -8,21 +8,21 @@ services:
       - ./osrm-data:/data
     working_dir: /data
     command: >
-      bash -c " if [ ! -f sao-paulo-latest.osrm ]; then
-        if [ ! -f sao-paulo-latest.osm.pbf ]; then
-          echo 'ERROR: sao-paulo-latest.osm.pbf not found!' &&
+      bash -c " if [ ! -f sao-paulo.osrm ]; then
+        if [ ! -f sao-paulo.osm.pbf ]; then
+          echo 'ERROR: sao-paulo.osm.pbf not found!' &&
           echo 'Please download it first with:' &&
-          echo 'curl -L -o osrm-data/sao-paulo-latest.osm.pbf https://download.geofabrik.de/south-america/brazil/sudeste/sao-paulo-latest.osm.pbf' &&
+          echo 'curl -L -o osrm-data/sao-paulo.osm.pbf https://download.openstreetmap.fr/extracts/south-america/brazil/southeast/sao-paulo.osm.pbf' &&
           exit 1
         fi &&
         echo 'Extracting road network...' &&
-        osrm-extract -p /opt/car.lua sao-paulo-latest.osm.pbf &&
+        osrm-extract -p /opt/car.lua sao-paulo.osm.pbf &&
         echo 'Partitioning network...' &&
-        osrm-partition sao-paulo-latest.osrm &&
+        osrm-partition sao-paulo.osrm &&
         echo 'Customizing network...' &&
-        osrm-customize sao-paulo-latest.osrm &&
+        osrm-customize sao-paulo.osrm &&
         echo 'Data preparation complete!' &&
-        echo 'You can now delete sao-paulo-latest.osm.pbf to save space'
+        echo 'You can now delete sao-paulo.osm.pbf to save space'
       else
         echo 'Data already prepared, skipping...'
       fi "
@@ -38,7 +38,7 @@ services:
     volumes:
       - ./osrm-data:/data
     working_dir: /data
-    command: osrm-routed --algorithm=mld sao-paulo-latest.osrm --max-table-size 100000
+    command: osrm-routed --algorithm=mld sao-paulo.osrm --max-table-size 100000
     restart: unless-stopped
 
 volumes:
