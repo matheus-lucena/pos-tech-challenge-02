@@ -62,7 +62,7 @@ class VRPGeneticAlgorithm:
         self.cost_calculator = CostCalculator(
             self.duration_matrix, self.distance_matrix,
             self.max_trip_duration, self.max_trip_distance, self.time_to_stop,
-            self.time_weight, self.distance_weight
+            self.vehicle_max_points, self.time_weight, self.distance_weight
         )
         
         self.parallel_evaluator = ParallelFitnessEvaluator(

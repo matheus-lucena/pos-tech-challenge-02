@@ -118,6 +118,9 @@ def _trip_cost_worker(trip_points: List[int]) -> Tuple[float, int, int]:
     if cur_duration > _worker_max_trip_duration or cur_distance > _worker_max_trip_distance:
         return float('inf'), cur_duration, cur_distance
 
+    if len(trip_points) > _worker_vehicle_max_points + 2:
+        return float('inf'), cur_duration, cur_distance
+
     duration_ratio = cur_duration / _worker_max_trip_duration
     distance_ratio = cur_distance / _worker_max_trip_distance
     
@@ -136,6 +139,7 @@ class CostCalculator:
                  max_trip_duration: int, 
                  max_trip_distance: int,
                  time_to_stop: int,
+                 vehicle_max_points: int,
                  time_weight: float = 0.5, 
                  distance_weight: float = 0.5):
         self.duration_matrix = duration_matrix
@@ -143,6 +147,7 @@ class CostCalculator:
         self.max_trip_duration = max_trip_duration
         self.max_trip_distance = max_trip_distance
         self.time_to_stop = time_to_stop
+        self.vehicle_max_points = vehicle_max_points
         self.time_weight = time_weight
         self.distance_weight = distance_weight
     
@@ -172,6 +177,9 @@ class CostCalculator:
         if cur_duration > self.max_trip_duration or cur_distance > self.max_trip_distance:
             return float('inf'), cur_duration, cur_distance
 
+        if len(trip_points) > self.vehicle_max_points + 2:
+            return float('inf'), cur_duration, cur_distance
+        
         duration_ratio = cur_duration / self.max_trip_duration
         distance_ratio = cur_distance / self.max_trip_distance
         
